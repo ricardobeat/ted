@@ -17,11 +17,14 @@ const int CHROME_CELLS = 1 + LIGHT_CELLS * 3; // a cell of margin, then three
 const String LIGHT_GLYPH = "●";
 
 fn void close_clicked(void* id, String id_str, int col, int row) @local {
-	// milktea::quit() asks the framework to stop its main loop, which tears
-	// raylib/GLFW down in the right order. Calling rl::close_window() here
-	// would yank GLFW out from under milktea mid-frame and leave it logging
-	// "GLFW library is not initialized" on every later raylib call.
-	milktea::quit();
+	// request_quit() asks the loop to stop, which tears raylib/GLFW down in
+	// the right order. A click handler returns void, so the Cmd quit()
+	// builds has nowhere to go — request_quit() is the same request through
+	// the message queue, which every backend drains each frame. Calling
+	// rl::close_window() here would yank GLFW out from under milktea
+	// mid-frame and leave it logging "GLFW library is not initialized" on
+	// every later raylib call.
+	milktea::request_quit();
 }
 
 fn void minimise_clicked(void* id, String id_str, int col, int row) @local {
