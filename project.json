@@ -1,0 +1,61 @@
+{
+  "langrev": "1",
+  "warnings": [
+    "no-unused-parameter",
+    "no-unused-import"
+  ],
+  "sources": [
+    "vendor/milktea/milktea/**",
+    "vendor/milktea/glaze/**",
+    "vendor/milktea/xray/**",
+    "vendor/milktea/xray/layout/**",
+    "vendor/milktea/boba/**"
+  ],
+  "targets": {
+    "ted": {
+      "type": "executable",
+      "sources": [
+        "src/theme.c3",
+        "src/button.c3",
+        "src/dialog.c3",
+        "src/menu.c3",
+        "src/sidebar.c3",
+        "src/ted.c3"
+      ],
+      "c-sources": [
+        "vendor/milktea/milktea/tty_winsize.c"
+      ],
+      "opt": "Os",
+      "strip-unused": true
+    },
+    "ted-gui": {
+      "type": "executable",
+      "sources": [
+        "src/theme.c3",
+        "src/button.c3",
+        "src/dialog.c3",
+        "src/menu.c3",
+        "src/sidebar.c3",
+        "src/ted.c3",
+        "src/chrome.c3",
+        "src/gui_main.c3",
+        "vendor/milktea/milktea-gui/**"
+      ],
+      "c-sources": [
+        "vendor/milktea/milktea/tty_winsize.c",
+        "vendor/milktea/milktea-gui/macos_window.c"
+      ],
+      "features": [
+        "MILKTEA_GUI"
+      ],
+      "dependency-search-paths": [
+        "vendor/milktea"
+      ],
+      "dependencies": [
+        "raylib6"
+      ],
+      "opt": "Os",
+      "strip-unused": true
+    }
+  }
+}

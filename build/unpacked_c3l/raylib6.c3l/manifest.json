@@ -1,0 +1,101 @@
+{
+  "provides": "raylib6",
+  "targets": {
+	"macos-x64": {
+	  "link-args": [],
+	  "dependencies": [],
+	  "linked-libraries": [
+		"raylib",
+		"raygui",
+		"Cocoa.framework",
+		"OpenGL.framework",
+		"CoreVideo.framework",
+		"GLUT.framework",
+		"IOKit.framework"
+	  ]
+	},
+	"macos-aarch64": {
+	  "link-args": [],
+	  "dependencies": [],
+	  "linked-libraries": [
+		"raylib",
+		"raygui",
+		"Cocoa.framework",
+		"OpenGL.framework",
+		"CoreVideo.framework",
+		"GLUT.framework",
+		"IOKit.framework"
+	  ]
+	},
+	"linux-x64": {
+	  "link-args": [],
+	  "dependencies": [],
+	  "linked-libraries": [
+		"raylib",
+		"raygui",
+		"X11",
+		"Xrandr",
+		"Xinerama",
+		"Xi",
+		"Xcursor",
+		"m"
+	  ]
+	},
+	"linux-aarch64": {
+	  "link-args": [],
+	  "dependencies": [],
+	  "linked-libraries": [
+		"raylib",
+		"raygui",
+		"X11",
+		"Xrandr",
+		"Xinerama",
+		"Xi",
+		"Xcursor",
+		"m"
+	  ]
+	},
+	"freebsd-x64": {
+	  "link-args": [],
+	  "dependencies": [],
+	  "linked-libraries": [
+		"raylib",
+		"raygui",
+		"m"
+	  ]
+	},
+	"windows-x64": {
+	  "linked-libraries": [
+		"raylib",
+		"raygui",
+		"gdi32",
+		"winmm"
+	  ],
+	  "wincrt": "none"
+	},
+	"windows-aarch64": {
+	  "linked-libraries": [
+		"raylib",
+		"raygui",
+		"gdi32",
+		"winmm"
+	  ],
+	  "wincrt": "none"
+	},
+	"wasm32": {
+	  "linked-libraries": [
+		"raylib",
+		"raygui"
+	  ]
+	},
+	"emscripten": {
+		"link-args": [
+			"-sUSE_GLFW=3"
+		],
+		"linked-libraries": [
+			"raylib",
+			"raygui"
+	  ]
+	}
+  }
+}
