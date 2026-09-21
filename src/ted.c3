@@ -124,12 +124,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	}
 	String? open_opt = std::os::env::tget_var("TED_OPEN");
 	if (try path = open_opt) {
-		int idx = self.open_file_add(path);
-		if (idx >= 0) {
-			self.active_file = idx;
-			self.current_file = path;
-			self.load_file(path);
-		}
+		open_from_env(self, path);
 	}
 	String? dialog_opt = std::os::env::tget_var("TED_DIALOG");
 	if (try d = dialog_opt) {
@@ -139,6 +134,28 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	}
 
 	return null;
+}
+
+// open_from_env opens every file TED_OPEN names, comma separated, and leaves
+// the last one active. One path was enough while the sidebar only had to
+// render; a list is what lets a snapshot show a selection moving between
+// rows, which takes at least two of them.
+fn void open_from_env(Editor* e, String spec) {
+	sz start = 0;
+	for (sz i = 0; i <= spec.len; i++) {
+		if (i == spec.len || spec[i] == ',') {
+			if (i > start) {
+				String path = spec[start:i - start];
+				int idx = e.open_file_add(path);
+				if (idx >= 0) {
+					e.active_file = idx;
+					e.current_file = path;
+					e.load_file(path);
+				}
+			}
+			start = i + 1;
+		}
+	}
 }
 
 // open_file_add pushes a path onto the open-files list, returning the new
@@ -628,12 +645,7 @@ fn int dump_render() {
 	}
 	String? open_opt = std::os::env::tget_var("TED_OPEN");
 	if (try path = open_opt) {
-		int idx = e.open_file_add(path);
-		if (idx >= 0) {
-			e.active_file = idx;
-			e.current_file = path;
-			e.load_file(path);
-		}
+		open_from_env(&e, path);
 	}
 	String? dialog_opt = std::os::env::tget_var("TED_DIALOG");
 	if (try d = dialog_opt) {
