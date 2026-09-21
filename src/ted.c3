@@ -367,13 +367,19 @@ fn milktea::Cmd Editor.handle_editor_key(&self, milktea::KeyMsg k) {
 	return null;
 }
 
+// handle_sidebar_files_key moves through the open-files list. Moving the
+// selection switches the editor to that file, the same as clicking the row
+// does: a sidebar that says one file is current while the editor shows
+// another is worse than either half alone. activate_file ignores an index
+// out of range, so the ends of the list need no special case beyond reaching
+// them.
 fn milktea::Cmd Editor.handle_sidebar_files_key(&self, milktea::KeyMsg k) {
 	if (self.open_file_count == 0) return null;
 	switch (k.code) {
 		case milktea::KeyCode.UP:
-			if (self.active_file > 0) self.active_file--;
+			self.activate_file(self.active_file - 1);
 		case milktea::KeyCode.DOWN:
-			if (self.active_file < self.open_file_count - 1) self.active_file++;
+			self.activate_file(self.active_file + 1);
 		case milktea::KeyCode.ENTER:
 			self.focus_editor();
 		default:
