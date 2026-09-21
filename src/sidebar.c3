@@ -41,6 +41,10 @@ struct FileSlot {
 fn void file_row_clicked(void* id, String id_str, int col, int row) @feat(MILKTEA_GUI) @local {
 	FileSlot* s = (FileSlot*)id;
 	s.ed.activate_file(s.index);
+	// A click on a list row is also what puts the keyboard on that list, the
+	// way it does in any desktop app: the arrows then move the selection the
+	// user just clicked, instead of editing the file behind it.
+	s.ed.focus = FOCUS_SIDEBAR_FILES;
 }
 
 fn void file_row_hover_in(void* id, String id_str, int col, int row) @feat(MILKTEA_GUI) @local {
@@ -59,19 +63,21 @@ fn void file_row_hover_out(void* id, String id_str, int col, int row) @feat(MILK
 // to do with the (name, is_dir) tuple it hands us — open the file or navigate
 // into the directory. The picker takes care of updating its own cursor and
 // selected state, and the GUI loop wires on_hover_in/out internally so the
-// hover highlight follows the pointer without any work on our side.
+// hover highlight follows the pointer without any work on our side. Which
+// panel the keyboard ends up on follows from what the click meant: opening a
+// file is editing, navigating a directory is browsing.
 
 fn void browser_row_clicked(void* id, String name, bool is_dir, int col, int row) @feat(MILKTEA_GUI) @local {
 	Editor* ed = (Editor*)id;
 	if (is_dir) {
 		String path = ed.browser.current_dir;
 		String full = string::tformat("%s/%s", path, name);
-		$if env::DARWIN:
-			ed.browser.load_dir(full);
-		$else
-			ed.browser.load_dir(full);
-		$endif
+		ed.browser.load_dir(full);
 		ed.status_msg = string::tformat("Open dir: %s", full);
+		// Browsing a directory is work in the browser, so the keyboard stays
+		// there for the arrows that follow. Opening a file below is the
+		// opposite case: that is work in the editor.
+		ed.focus = FOCUS_SIDEBAR_BROWSER;
 	} else {
 		String path = ed.browser.current_dir;
 		String full = string::tformat("%s/%s", path, name);
@@ -84,14 +90,16 @@ fn void browser_row_clicked(void* id, String name, bool is_dir, int col, int row
 
 // ── Textarea press handler ──────────────────────────────────────────────────
 //
-// A click inside the editor body moves the caret and shifts focus to the
-// editor. boba hands us (row, col) already adjusted for gutter, prompt and
-// scroll, so we forward them straight to set_cursor.
+// A click inside the editor body focuses the editor first and then puts the
+// caret where the click landed. The two are one action from the user's side —
+// clicking the text is how you start editing at that spot — and the caret
+// position arrives already resolved to text coordinates, so there is no
+// layout math here to get wrong.
 
 fn void editor_pressed(void* id, int row, int col) @feat(MILKTEA_GUI) @local {
 	Editor* ed = (Editor*)id;
-	ed.textarea.set_cursor(row, col);
 	ed.focus_editor();
+	ed.textarea.set_cursor(row, col);
 }
 
 // ── Terminal render ─────────────────────────────────────────────────────────
@@ -215,6 +223,11 @@ fn String render_sidebar(Editor* ed) {
 // textarea's on_press hooks the editor body so a click there moves the
 // caret. Focus is not consulted anywhere — clicks work from any state.
 //
+// Hover is a faint tint and nothing more: the accent row belongs to the file
+// the editor is showing. The two reading the same was worse than no hover at
+// all — a row under the pointer looked selected, so the selection moving with
+// the arrows was invisible, and the arrows looked broken.
+//
 // FileSlot is held on the Editor rather than as a tnew per frame, so the
 // address stays stable across frames even though the node tree is rebuilt
 // each view() call. MAX_OPEN_FILES caps both the slot array and the active
@@ -229,6 +242,7 @@ fn xray::Node* sidebar_tree(Editor* ed) @feat(MILKTEA_GUI) {
 	Theme* th = &ed.theme;
 	glaze::Style bg = { .bg = th.browser_bg, .fg = th.browser_fg };
 	glaze::Style file_row = { .fg = th.browser_fg };
+	glaze::Style file_row_hover = { .fg = th.text, .bg = th.selection };
 	glaze::Style file_row_focused = {
 		.fg = th.ink, .bg = th.accent, .bold = true,
 	};
@@ -253,12 +267,13 @@ fn xray::Node* sidebar_tree(Editor* ed) @feat(MILKTEA_GUI) {
 			String prefix = is_current ? SIDEBAR_MARK : SIDEBAR_PAD;
 			String mark = (is_current && ed.modified) ? " [+]" : "";
 			String text = string::tformat("%s%s%s", prefix, name, mark);
-			// Highlight choice: active file always shows its marker; the
-			// selection style (background) only on hover, so the sidebar
-			// does not light up everything that cannot be hovered away.
+			// Highlight choice: the file the editor is showing always takes
+			// the accent; the row under the pointer gets a faint tint, and
+			// only when it is not that file — a hover must never be mistaken
+			// for the selection, or the arrows look like they do nothing.
 			glaze::Style* s;
-			if (i == ed.file_hover) { s = &file_row_focused; }
-			else if (is_current) { s = &file_row_focused; }
+			if (is_current) { s = &file_row_focused; }
+			else if (i == ed.file_hover) { s = &file_row_hover; }
 			else { s = &file_row; }
 			ed.file_slots[i] = { .ed = ed, .index = i };
 			xray::Node* row = milktea::text(*s, text).height(milktea::cells(1));
