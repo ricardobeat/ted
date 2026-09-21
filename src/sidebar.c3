@@ -25,10 +25,81 @@ fn String sidebar_basename(String path) {
 	return path;
 }
 
-fn bool sidebar_is_active(Editor* ed, int idx) => ed.active_file == idx;
+// ── File-row click context ───────────────────────────────────────────────────
+//
+// Each open-file row in the sidebar owns one FileSlot, registered into the
+// node tree's click context via .id_with(&slot). The static handlers below
+// read the slot to figure out which file was clicked and what to do with it,
+// without the click site needing any layout math — the framework passes
+// rect-local cell coordinates, but the slot's index is the row's identity.
 
-// render_sidebar returns the rendered sidebar as a styled string. Two panels,
-// top to bottom: open files, then the file browser.
+struct FileSlot {
+	Editor* ed;
+	int index;
+}
+
+fn void file_row_clicked(void* id, String id_str, int col, int row) @feat(MILKTEA_GUI) @local {
+	FileSlot* s = (FileSlot*)id;
+	s.ed.activate_file(s.index);
+}
+
+fn void file_row_hover_in(void* id, String id_str, int col, int row) @feat(MILKTEA_GUI) @local {
+	FileSlot* s = (FileSlot*)id;
+	s.ed.file_hover = s.index;
+}
+
+fn void file_row_hover_out(void* id, String id_str, int col, int row) @feat(MILKTEA_GUI) @local {
+	FileSlot* s = (FileSlot*)id;
+	if (s.ed.file_hover == s.index) s.ed.file_hover = -1;
+}
+
+// ── Browser click handler ────────────────────────────────────────────────────
+//
+// The FilePicker fires on_row_click for any visible row; we just decide what
+// to do with the (name, is_dir) tuple it hands us — open the file or navigate
+// into the directory. The picker takes care of updating its own cursor and
+// selected state, and the GUI loop wires on_hover_in/out internally so the
+// hover highlight follows the pointer without any work on our side.
+
+fn void browser_row_clicked(void* id, String name, bool is_dir, int col, int row) @feat(MILKTEA_GUI) @local {
+	Editor* ed = (Editor*)id;
+	if (is_dir) {
+		String path = ed.browser.current_dir;
+		String full = string::tformat("%s/%s", path, name);
+		$if env::DARWIN:
+			ed.browser.load_dir(full);
+		$else
+			ed.browser.load_dir(full);
+		$endif
+		ed.status_msg = string::tformat("Open dir: %s", full);
+	} else {
+		String path = ed.browser.current_dir;
+		String full = string::tformat("%s/%s", path, name);
+		// Match load_file's behaviour: it opens (or activates if already open)
+		// the file at full path, focusing the editor.
+		ed.load_file(full);
+		ed.focus_editor();
+	}
+}
+
+// ── Textarea press handler ──────────────────────────────────────────────────
+//
+// A click inside the editor body moves the caret and shifts focus to the
+// editor. boba hands us (row, col) already adjusted for gutter, prompt and
+// scroll, so we forward them straight to set_cursor.
+
+fn void editor_pressed(void* id, int row, int col) @feat(MILKTEA_GUI) @local {
+	Editor* ed = (Editor*)id;
+	ed.textarea.set_cursor(row, col);
+	ed.focus_editor();
+}
+
+// ── Terminal render ─────────────────────────────────────────────────────────
+//
+// The terminal build gets the sidebar as a single styled string — no per-row
+// click wiring because the terminal event loop already routes keys through
+// the focus system. The GUI build replaces this with sidebar_tree() below.
+
 fn String render_sidebar(Editor* ed) {
 	Theme* th = &ed.theme;
 
@@ -136,6 +207,107 @@ fn String render_sidebar(Editor* ed) {
 	return out.str_view();
 }
 
+// ── GUI render ──────────────────────────────────────────────────────────────
+//
+// sidebar_tree() builds the sidebar as a clickable node tree. Each open-file
+// row is its own node with on_click + on_hover_in/out; the browser is the
+// picker's own tree_node() (which exposes per-row clicks the same way). The
+// textarea's on_press hooks the editor body so a click there moves the
+// caret. Focus is not consulted anywhere — clicks work from any state.
+//
+// FileSlot is held on the Editor rather than as a tnew per frame, so the
+// address stays stable across frames even though the node tree is rebuilt
+// each view() call. MAX_OPEN_FILES caps both the slot array and the active
+// files list; the unused slots at the tail of file_slots[] are simply left
+// uninitialised, which is harmless — only rows that exist in the open-files
+// list ever carry a click handler.
+
+const int SIDEBAR_FILES_PANEL_H = 1; // "Open" header
+const int SIDEBAR_BROWSER_PANEL_H = 1; // "Files" header
+
+fn xray::Node* sidebar_tree(Editor* ed) @feat(MILKTEA_GUI) {
+	Theme* th = &ed.theme;
+	glaze::Style bg = { .bg = th.browser_bg, .fg = th.browser_fg };
+	glaze::Style file_row = { .fg = th.browser_fg };
+	glaze::Style file_row_focused = {
+		.fg = th.ink, .bg = th.accent, .bold = true,
+	};
+
+	xray::Node* v = xray::vstack().width(milktea::cells(SIDEBAR_WIDTH));
+
+	// "Open" header
+	v.add(milktea::text(bg, section_header(th, "Open"))
+		.height(milktea::cells(SIDEBAR_FILES_PANEL_H)));
+
+	// Open-file rows.
+	if (ed.open_file_count == 0) {
+		glaze::Style empty_row = { .fg = th.dim };
+		v.add(milktea::text(empty_row, string::tformat("%s(none)", SIDEBAR_PAD))
+			.height(milktea::cells(1)));
+	} else {
+		for (int i = 0; i < ed.open_file_count; i++) {
+			OpenFile* f = &ed.open_files[i];
+			String path = (String)f.path_buf[:f.path_len];
+			String name = sidebar_basename(path);
+			bool is_current = i == ed.active_file;
+			String prefix = is_current ? SIDEBAR_MARK : SIDEBAR_PAD;
+			String mark = (is_current && ed.modified) ? " [+]" : "";
+			String text = string::tformat("%s%s%s", prefix, name, mark);
+			// Highlight choice: active file always shows its marker; the
+			// selection style (background) only on hover, so the sidebar
+			// does not light up everything that cannot be hovered away.
+			glaze::Style* s;
+			if (i == ed.file_hover) { s = &file_row_focused; }
+			else if (is_current) { s = &file_row_focused; }
+			else { s = &file_row; }
+			ed.file_slots[i] = { .ed = ed, .index = i };
+			xray::Node* row = milktea::text(*s, text).height(milktea::cells(1));
+			row.id_with(&ed.file_slots[i])
+				.on_click(&file_row_clicked)
+				.on_hover_in(&file_row_hover_in)
+				.on_hover_out(&file_row_hover_out);
+			v.add(row);
+		}
+	}
+
+	v.add(milktea::text(bg, "").height(milktea::cells(1)));
+
+	// "Files" header + browser tree.
+	v.add(milktea::text(bg, section_header(th, "Files"))
+		.height(milktea::cells(SIDEBAR_BROWSER_PANEL_H)));
+	v.add(ed.browser.tree_node().width(milktea::cells(SIDEBAR_WIDTH)));
+
+	return v;
+}
+
+// sidebar_node returns the sidebar in whatever form suits the backend:
+// terminal gets a single styled string, GUI gets a clickable node tree.
+fn xray::Node* sidebar_node(Editor* ed) {
+	Theme* th = &ed.theme;
+	glaze::Style panel = {
+		.bg = th.browser_bg, .fg = th.browser_fg,
+		.border = glaze::NORMAL, .border_color = th.border,
+	};
+	$if $feat(MILKTEA_GUI):
+		// The GUI version is a real tree; the panel border would frame a
+		// single string, not a tree, so we skip the border in the GUI build
+		// and let the sidebar stand on its own background. A border can be
+		// added back once xray can frame an arbitrary node tree the same way.
+		return sidebar_tree(ed);
+	$else
+		return milktea::text(panel, render_sidebar(ed))
+			.width(milktea::cells(SIDEBAR_WIDTH));
+	$endif
+}
+
+// sidebar_init registers the click hooks the GUI uses. Called once from
+// Editor.init(). The terminal build does not need any of this.
+fn void sidebar_init(Editor* ed) @feat(MILKTEA_GUI) {
+	ed.file_hover = -1;
+	ed.browser.on_row_click(&browser_row_clicked, ed);
+	ed.textarea.on_press(&editor_pressed, ed);
+}
+
 // section_header renders a section label followed by a dim rule that fills
 // the panel, so the sidebar reads as two labelled groups instead of running
 // the titles into the lists below them.
@@ -184,15 +356,4 @@ fn String strip_ansi(String s) {
 		i++;
 	}
 	return out.str_view();
-}
-
-fn xray::Node* sidebar_node(Editor* ed) {
-	Theme* th = &ed.theme;
-	glaze::Style panel = {
-		.bg = th.browser_bg, .fg = th.browser_fg,
-		.border = glaze::NORMAL, .border_color = th.border,
-	};
-	xray::Node* n = milktea::text(panel, render_sidebar(ed))
-		.width(milktea::cells(SIDEBAR_WIDTH));
-	return n;
 }
