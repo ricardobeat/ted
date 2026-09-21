@@ -16,7 +16,7 @@ const int CHROME_CELLS = 1 + LIGHT_CELLS * 3; // a cell of margin, then three
 
 const String LIGHT_GLYPH = "●";
 
-fn void close_clicked(void* ctx, int col, int row) @local {
+fn void close_clicked(void* id, String id_str, int col, int row) @local {
 	// milktea::quit() asks the framework to stop its main loop, which tears
 	// raylib/GLFW down in the right order. Calling rl::close_window() here
 	// would yank GLFW out from under milktea mid-frame and leave it logging
@@ -24,11 +24,11 @@ fn void close_clicked(void* ctx, int col, int row) @local {
 	milktea::quit();
 }
 
-fn void minimise_clicked(void* ctx, int col, int row) @local {
+fn void minimise_clicked(void* id, String id_str, int col, int row) @local {
 	rl::minimize_window();
 }
 
-fn void zoom_clicked(void* ctx, int col, int row) @local {
+fn void zoom_clicked(void* id, String id_str, int col, int row) @local {
 	if (rl::is_window_maximized()) {
 		rl::restore_window();
 	} else {
@@ -40,7 +40,7 @@ fn xray::Node* light(glaze::Color bg, glaze::Color fg, xray::ClickFn on) @local 
 	glaze::Style s = { .bg = bg, .fg = fg };
 	xray::Node* n = milktea::text(s, s.render(LIGHT_GLYPH))
 		.width(milktea::cells(LIGHT_CELLS));
-	n.on_click(on, null);
+	n.on_click(on);
 	return n;
 }
 

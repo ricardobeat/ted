@@ -56,6 +56,11 @@ struct Editor {
 	OpenFile[MAX_OPEN_FILES] open_files;
 	int open_file_count;
 	int active_file;
+	// GUI-only: per-row click slot for the open-files panel of the sidebar.
+	// Each row's id_with(&file_slots[i]) carries this address through the
+	// node tree to the click handler. -1 in file_hover = no row hovered.
+	FileSlot[MAX_OPEN_FILES] file_slots @feat(MILKTEA_GUI);
+	int file_hover @feat(MILKTEA_GUI);
 
 	// Cells reserved at the left of the top bar for window buttons drawn by
 	// the platform (see gui_main.c3); zero in the terminal.
@@ -104,6 +109,11 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	self.win_h = 24;
 	self.open_file_count = 0;
 	self.active_file = -1;
+	// GUI: register the click handlers the sidebar uses. The terminal build
+	// is keyboard-driven and never sees these paths.
+	$if $feat(MILKTEA_GUI):
+		sidebar_init(self);
+	$endif
 
 	// Layout-debug hooks for the snapshot harness (`./out/ted --render`).
 	String? focus_opt = std::os::env::tget_var("TED_FOCUS");
@@ -188,6 +198,28 @@ fn void Editor.new_file(&self) {
 	self.current_file = "";
 	self.modified = false;
 	self.status_msg = "New file";
+}
+
+// activate_file switches the editor to the open file at `idx`. Called both
+// from the sidebar keyboard handler and from the GUI click path — the click
+// fires regardless of which panel holds keyboard focus, so the user can jump
+// between open files without first focusing the sidebar.
+fn void Editor.activate_file(&self, int idx) {
+	if (idx < 0 || idx >= self.open_file_count) return;
+	if (idx == self.active_file) return;
+	OpenFile* f = &self.open_files[idx];
+	String path = (String)f.path_buf[:f.path_len];
+	self.active_file = idx;
+	self.current_file = path;
+	self.textarea.clear();
+	char[]? data = file::load_temp(path);
+	if (catch err = data) {
+		self.status_msg = string::tformat("Error: could not read %s", path);
+		return;
+	}
+	String content = (String)data;
+	self.textarea.handle_paste(content);
+	self.modified = false;
 }
 
 // ── Focus helpers ──────────────────────────────────────────────────────────

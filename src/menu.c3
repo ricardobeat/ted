@@ -119,8 +119,8 @@ fn Chosen Menu.take_pending(&self) {
 	return p;
 }
 
-fn void title_clicked(void* ctx, int col, int row) @local {
-	TitleSlot* slot = (TitleSlot*)ctx;
+fn void title_clicked(void* id, String id_str, int col, int row) @local {
+	TitleSlot* slot = (TitleSlot*)id;
 	Menu* m = slot.menu;
 	m.title_press = true;
 	// Clicking the title of the open menu closes it, the way a platform menu
@@ -135,15 +135,15 @@ fn void title_clicked(void* ctx, int col, int row) @local {
 	m.item = 0;
 }
 
-fn void item_clicked(void* ctx, int col, int row) @local {
-	ItemSlot* slot = (ItemSlot*)ctx;
+fn void item_clicked(void* id, String id_str, int col, int row) @local {
+	ItemSlot* slot = (ItemSlot*)id;
 	slot.menu.item = slot.index;
 	slot.menu.open = false;
 	slot.menu.pending = Chosen.PICKED;
 }
 
-fn void dropdown_dismissed(void* ctx, int col, int row) @local {
-	Menu* m = (Menu*)ctx;
+fn void dropdown_dismissed(void* id, String id_str, int col, int row) @local {
+	Menu* m = (Menu*)id;
 	// A title already handled this press — it either moved the menu or closed
 	// it, and either way the panel must not undo that.
 	if (m.title_press) return;
@@ -179,7 +179,7 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 		String label = (highlighted ? active : bar).render(self.titles[i]);
 		xray::Node* title_node = milktea::text(bar, label)
 			.width(milktea::cells(glaze::string_width(self.titles[i])));
-		title_node.on_click(&title_clicked, &self.title_slots[i]);
+		title_node.id_with(&self.title_slots[i]).on_click(&title_clicked);
 		row.add(title_node);
 	}
 	row.add(milktea::text(filler, "").fill(1).window_drag(true));
@@ -214,13 +214,13 @@ fn xray::Node* Menu.dropdown(&self, int below, Theme* th) {
 		.with_padding(1, 1, 1, 1)
 		.at(self.title_x[self.selected] + self.x_inset, below)
 		.shadow(milktea::shadow(2, 1).with_color(milktea::to_cell_color(th.shadow)));
-	panel_node.on_click_outside(&dropdown_dismissed, self);
+	panel_node.id_with(self).on_click_outside(&dropdown_dismissed);
 
 	for (int i = 0; i < MENU_ITEMS; i++) {
 		self.item_slots[i] = { .menu = self, .index = i };
 		glaze::Style s = i == self.item ? selected : item;
 		xray::Node* row_node = self.item_row(self.items[self.selected][i], s);
-		row_node.on_click(&item_clicked, &self.item_slots[i]);
+		row_node.id_with(&self.item_slots[i]).on_click(&item_clicked);
 		panel_node.add(row_node);
 	}
 	return panel_node;
