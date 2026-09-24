@@ -21,13 +21,15 @@ const int STATUS_PAD = 2;
 // key and never leaves it. Only ESC leaves the editor, into MENU_BAR.
 //
 // MENU_BAR owns LEFT/RIGHT/ENTER/DOWN for the menu when no dropdown is open.
-// TAB moves to SIDEBAR_FILES; ESC returns to EDITOR.
+// TAB moves to the sidebar; ESC returns to EDITOR.
 //
-// The sidebar has two panels, but only the focused one takes keys:
+// The sidebar is one stop with two panels, and the focus value says which
+// one the keyboard is in:
 //   FOCUS_SIDEBAR_FILES    the open-files list at the top of the sidebar
 //   FOCUS_SIDEBAR_BROWSER  the file browser at the bottom of the sidebar
-// TAB rotates between the two sidebar panels and MENU_BAR. ESC always
-// returns to EDITOR.
+// UP and DOWN run through both as one list: DOWN past the last open file
+// lands on the browser's first row, UP from there goes back. TAB goes
+// between MENU_BAR and the sidebar. ESC always returns to EDITOR.
 enum Focus : int {
 	FOCUS_EDITOR,
 	FOCUS_MENU_BAR,
@@ -277,15 +279,13 @@ fn bool Editor.in_sidebar(&self) {
 
 // cycle_focus moves to the next stop after a TAB. TAB only cycles once the
 // editor has been left with ESC (in the editor TAB inserts indentation), so
-// the ring never contains the editor: menu → sidebar-files → sidebar-browser
-// → menu.
+// the ring never contains the editor: menu → sidebar → menu. The sidebar is
+// entered at the open files, or at the browser when nothing is open.
 fn void Editor.cycle_focus(&self) {
 	switch (self.focus) {
-		case FOCUS_EDITOR:        self.focus = FOCUS_MENU_BAR;
-		case FOCUS_MENU_BAR:      self.focus = FOCUS_SIDEBAR_FILES;
-		case FOCUS_SIDEBAR_FILES: self.focus = FOCUS_SIDEBAR_BROWSER;
-		case FOCUS_SIDEBAR_BROWSER:
-		default:                  self.focus = FOCUS_MENU_BAR;
+		case FOCUS_EDITOR:   self.focus = FOCUS_MENU_BAR;
+		case FOCUS_MENU_BAR: self.focus = self.open_file_count > 0 ? FOCUS_SIDEBAR_FILES : FOCUS_SIDEBAR_BROWSER;
+		default:             self.focus = FOCUS_MENU_BAR;
 	}
 }
 
@@ -327,8 +327,8 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 
 	// From the editor, TAB is indentation like any other key: the textarea
 	// handles it and focus does not move. Only ESC leaves the editor, into
-	// the menu bar; once outside, TAB cycles the remaining stops (menu →
-	// sidebar-files → sidebar-browser → menu) and ESC returns to the editor.
+	// the menu bar; once outside, TAB goes between the menu and the sidebar
+	// and ESC returns to the editor.
 	if (k.code == milktea::KeyCode.TAB && self.focus != FOCUS_EDITOR) {
 		self.cycle_focus();
 		return null;
@@ -414,23 +414,33 @@ fn milktea::Cmd Editor.handle_editor_key(&self, milktea::KeyMsg k) {
 // selection switches the editor to that file, the same as clicking the row
 // does: a sidebar that says one file is current while the editor shows
 // another is worse than either half alone. activate_file ignores an index
-// out of range, so the ends of the list need no special case beyond reaching
-// them.
+// out of range, so UP at the top does nothing; DOWN at the bottom moves on
+// into the browser, the list's continuation.
 fn milktea::Cmd Editor.handle_sidebar_files_key(&self, milktea::KeyMsg k) {
-	if (self.open_file_count == 0) return null;
 	switch (k.code) {
 		case milktea::KeyCode.UP:
 			self.activate_file(self.active_file - 1);
 		case milktea::KeyCode.DOWN:
-			self.activate_file(self.active_file + 1);
+			// Past the last open file the list carries on into the browser.
+			if (self.active_file >= self.open_file_count - 1) {
+				self.focus = FOCUS_SIDEBAR_BROWSER;
+				self.browser.cursor = 0;
+			} else {
+				self.activate_file(self.active_file + 1);
+			}
 		case milktea::KeyCode.ENTER:
-			self.focus_editor();
+			if (self.open_file_count > 0) self.focus_editor();
 		default:
 	}
 	return null;
 }
 
 fn milktea::Cmd Editor.handle_sidebar_browser_key(&self, milktea::KeyMsg k) {
+	// Above the browser's first row are the open files.
+	if (k.code == milktea::KeyCode.UP && self.browser.cursor == 0 && self.open_file_count > 0) {
+		self.focus = FOCUS_SIDEBAR_FILES;
+		return null;
+	}
 	if (k.code == milktea::KeyCode.ENTER && self.browser.cursor < self.browser.count
 		&& !self.browser.is_dirs[self.browser.cursor]) {
 		String name = (String)self.browser.names[self.browser.cursor][:self.browser.name_lens[self.browser.cursor]];
