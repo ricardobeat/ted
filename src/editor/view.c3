@@ -57,6 +57,11 @@ struct View (xray::Content) {
 	glaze::Style selection_style;
 	// A caret other than the primary one, which the terminal draws.
 	glaze::Style caret_style;
+	// Scrollbar at the right edge: a thin track with a thicker thumb in the
+	// visible region. Both carry the editor background so the bar reads as
+	// part of the page, not a panel stuck to its side.
+	glaze::Style scrollbar_track_style;
+	glaze::Style scrollbar_thumb_style;
 	milktea::CursorStyle caret;
 
 	// Fired when a press lands in the view, after it has moved the caret.
@@ -329,6 +334,62 @@ fn sz LineLayout.pos_at(&self, int row, int col, sz line_end) {
 
 // ── scrolling ─────────────────────────────────────────────────────────────
 
+// SCROLLBAR_W is the number of cells reserved on the right edge of the view
+// for the scrollbar: one cell of gap, then one cell of bar. The bar itself is
+// always one cell wide; the gap keeps it from kissing the text.
+const int SCROLLBAR_W = 2;
+
+fn int View.scrollbar_reserved(&self) => SCROLLBAR_W;
+
+// total_rows is the document's wrapped row count — what the scrollbar tracks.
+// Each line contributes the number of rows it wraps into at the view's text
+// width; a line wider than the text area wraps into more than one row.
+// Render is itself called inside an @pool(), so a fresh tmem is already in
+// scope — layout_line's glyphs/rows lists live there and are released when
+// the caller exits.
+fn int View.total_rows(&self) {
+	int total = 0;
+	int lines = self.buf.line_count();
+	int width = self.text_width;
+	for (int l = 0; l < lines; l++) {
+		LineLayout ll;
+		self.layout_line(l, width, &ll);
+		total += (int)ll.rows.len();
+	}
+	return total;
+}
+
+// first_visible_row_index is the wrapped-row index of the top of the screen,
+// counting from the document's start. The thumb's row comes from this.
+fn int View.first_visible_row_index(&self) {
+	int idx = 0;
+	int lines = self.buf.line_count();
+	int width = self.text_width;
+	for (int l = 0; l < self.top_line && l < lines; l++) {
+		LineLayout ll;
+		self.layout_line(l, width, &ll);
+		idx += (int)ll.rows.len();
+	}
+	idx += self.top_row;
+	return idx;
+}
+
+// append_scrollbar writes the gap cell and the bar cell at the end of a row.
+// drawn is the row's screen index so the thumb lands in the right cell.
+fn void View.append_scrollbar(&self, DString* out, int drawn, int bar_reserved, int thumb_row) {
+	if (bar_reserved <= 0) return;
+	// The gap cell uses the text style so the background continues out to
+	// the bar — the bar itself is just a vertical line, not a panel.
+	out.append_string(self.text_style.render(" "));
+	String bar;
+	if (drawn == thumb_row) {
+		bar = self.scrollbar_thumb_style.render("┃");
+	} else {
+		bar = self.scrollbar_track_style.render("│");
+	}
+	out.append_string(bar);
+}
+
 fn int View.gutter_width(&self) {
 	if (!self.line_numbers) return 0;
 	int digits = 1;
@@ -427,11 +488,36 @@ fn bool same_style(glaze::Style* a, glaze::Style* b) @local {
 
 fn String View.render(&self, xray::Rect r) @dynamic {
 	int gutter = self.gutter_width();
+	// The scrollbar lives in the last two cells of every row: one cell of
+	// breathing room, then the bar itself. Reserve that space before laying
+	// out text so a wrapped line never lands under it.
+	int bar_reserved = self.scrollbar_reserved();
 	self.rect = r;
-	self.text_width = r.w - gutter;
+	self.text_width = r.w - gutter - bar_reserved;
 	self.height = r.h;
 	if (self.text_width < 1) self.text_width = 1;
 	int caret_line = self.buf.line_of(self.primary().head);
+
+	// The thumb sits at the row of the visible range that matches the view's
+	// place in the document. total_rows is the whole document's wrapped line
+	// count; visible_rows is what fits on screen. When the document fits, the
+	// thumb degenerates to a single cell that fills the column, so the bar is
+	// always present, never absent.
+	int total_rows = self.total_rows();
+	int visible_rows = r.h;
+	int thumb_row = -1;
+	if (total_rows > visible_rows && visible_rows > 1) {
+		// Which row of the document is on top of the screen, and how far
+		// the thumb's top edge should sit from the column's top.
+		int first_visible = self.first_visible_row_index();
+		int last_first = total_rows - visible_rows;
+		int span = visible_rows - 1;
+		if (last_first > 0) thumb_row = (first_visible * span + last_first / 2) / last_first;
+	} else if (total_rows > 0 && total_rows <= visible_rows) {
+		// Everything fits: hide the thumb, leave the track so the column
+		// still reads as a scrollbar.
+		thumb_row = -1;
+	}
 
 	DString out = dstring::temp();
 	int drawn = 0;
@@ -459,13 +545,15 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 			}
 			int pad = self.text_width - row.width;
 			if (pad > 0) out.append_string(self.text_style.render(spaces(pad)));
+			self.append_scrollbar(&out, drawn, bar_reserved, thumb_row);
 			drawn++;
 		}
 	}
 	// Past the end of the document the view is blank, in the text's colors.
 	for (; drawn < r.h; drawn++) {
 		if (drawn > 0) out.append_char('\n');
-		out.append_string(self.text_style.render(spaces(r.w)));
+		out.append_string(self.text_style.render(spaces(r.w - bar_reserved)));
+		self.append_scrollbar(&out, drawn, bar_reserved, thumb_row);
 	}
 	return out.str_view();
 }
@@ -473,8 +561,33 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 fn int View.measure(&self, int width) @dynamic => self.buf.line_count();
 fn int View.measure_width(&self, int height) @dynamic => self.text_width + self.gutter_width();
 
-// cursor puts the terminal's caret on the primary selection's head.
+// ── Caret ───────────────────────────────────────────────────────────────────
+//
+// A terminal places a cursor of its own, so the caret is left to it — which is
+// what a CursorStyle with no draw callback means. A GUI window has no cursor
+// to place, so it asks for one painted into the grid instead, through
+// View.caret.draw (see gui_main.c3). Either way the position comes from
+// cursor() below.
+
+// g_caret_style is what a painted caret draws with. xray's cursor callback
+// carries no context to read a theme from, so the view leaves the style here
+// on the way past: the same one the secondary carets draw with, so a caret
+// looks the same wherever it is.
+glaze::Style g_caret_style @local;
+
+// draw_caret paints the caret into the grid. xray hands it the character
+// already in the cell so the caret can show it through — that is what makes a
+// block caret readable — and a cell with nothing in it, past the end of a
+// line, draws as a blank block. blink is ignored: this caret is steady, the
+// way the terminal's cursor is in the terminal build.
+fn String draw_caret(int x, int y, bool blink, String under) {
+	String ch = under.len > 0 ? under : " ";
+	return g_caret_style.render(ch);
+}
+
+// cursor puts the caret on the primary selection's head.
 fn xray::ContentCursor View.cursor(&self, xray::Rect r) @dynamic {
+	g_caret_style = self.caret_style;
 	if (!self.focused) return {};
 	sz head = self.primary().head;
 	int line = self.buf.line_of(head);

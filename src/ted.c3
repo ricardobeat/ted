@@ -60,11 +60,6 @@ struct Editor {
 	OpenFile[MAX_OPEN_FILES] open_files;
 	int open_file_count;
 	int active_file;
-	// GUI-only: per-row click slot for the open-files panel of the sidebar.
-	// Each row's id_with(&file_slots[i]) carries this address through the
-	// node tree to the click handler. -1 in file_hover = no row hovered.
-	FileSlot[MAX_OPEN_FILES] file_slots @feat(MILKTEA_GUI);
-	int file_hover @feat(MILKTEA_GUI);
 
 	// Cells reserved at the left of the top bar for window buttons drawn by
 	// the platform (see gui_main.c3); zero in the terminal.
@@ -124,8 +119,8 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	self.win_h = 24;
 	self.open_file_count = 0;
 	self.active_file = -1;
-	// GUI: register the click handlers the sidebar uses. The terminal build
-	// is keyboard-driven and never sees these paths.
+	// GUI: register the press handler the editor's node carries. The
+	// terminal build is keyboard-driven and never sees it.
 	$if $feat(MILKTEA_GUI):
 		sidebar_init(self);
 	$endif
@@ -631,6 +626,14 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	self.doc.gutter_current_style = glaze::style().foreground(th.dim).background(th.editor_bg);
 	self.doc.selection_style = glaze::style().background(th.selection);
 	self.doc.caret_style = glaze::style().foreground(th.ink).background(th.cursor);
+	// Scrollbar: a thin track (│) with a thicker thumb (┃) on the row
+	// matching the view's place in the document. Both share the editor
+	// background so the column reads as part of the page.
+	self.doc.scrollbar_track_style = glaze::style()
+		.foreground(th.line_num).background(th.editor_bg);
+	glaze::Style thumb = glaze::style()
+		.foreground(th.dim).background(th.editor_bg);
+	self.doc.scrollbar_thumb_style = thumb.with_bold(true);
 	self.syntax.highlight(&self.doc, self.current_file);
 
 	self.browser.width = SIDEBAR_WIDTH;
