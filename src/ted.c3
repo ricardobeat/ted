@@ -505,6 +505,9 @@ fn milktea::Cmd Editor.quit(&self) {
 }
 
 fn milktea::Cmd Editor.handle_quit_confirm_key(&self, milktea::KeyMsg k) {
+	// Ctrl+Q again means "yes, quit", so it takes two presses to leave with
+	// unsaved changes rather than a trip to the Quit button.
+	if (k.ctrl && k.code == milktea::KeyCode.RUNE && k.rune == 'q') return milktea::quit();
 	if (self.quit_confirm.handle_key(k) == Pressed.CONFIRMED) return milktea::quit();
 	return null;
 }
