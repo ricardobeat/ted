@@ -305,6 +305,14 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	}
 
 	if (msg.kind == milktea::MsgKind.MOUSE) return self.handle_mouse_result();
+	// A terminal hands over pasted text (Cmd+V on a Mac) as one message.
+	if (msg.kind == milktea::MsgKind.PASTE) {
+		if (self.focus == FOCUS_EDITOR && msg.paste.len > 0) {
+			self.doc.insert_text(msg.paste);
+			self.modified = true;
+		}
+		return null;
+	}
 	if (msg.kind != milktea::MsgKind.KEY) return null;
 	milktea::KeyMsg k = msg.key;
 

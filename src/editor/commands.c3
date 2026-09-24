@@ -230,6 +230,27 @@ fn String View.selected_text(&self) {
 	return out.str_view();
 }
 
+// copy puts the selected text on the system clipboard; with nothing
+// selected it leaves the clipboard alone.
+fn void View.copy(&self) {
+	String text = self.selected_text();
+	if (text.len > 0) milktea::set_clipboard(text);
+}
+
+fn void View.cut(&self) {
+	String text = self.selected_text();
+	if (text.len == 0) return;
+	milktea::set_clipboard(text);
+	self.insert_text("");
+}
+
+// paste inserts the system clipboard's text over every selection.
+fn void View.paste(&self) {
+	if (try text = milktea::clipboard()) {
+		if (text.len > 0) self.insert_text(text);
+	}
+}
+
 fn void View.select_all(&self) {
 	self.set_selections({ { .anchor = 0, .head = self.buf.len(), .goal_col = -1 } });
 	self.history.seal();
@@ -382,10 +403,6 @@ fn sz next_char(String t, sz pos) {
 
 // ── keys ──────────────────────────────────────────────────────────────────
 
-// clipboard holds what copy and cut took, for paste. It is the editor's own:
-// the system clipboard is the host's to wire up.
-DString clipboard;
-
 // The key map, per platform. On macOS, Cmd is the command key (select all,
 // clipboard, undo) and moves to the ends of lines and the document; Option
 // moves by words; Ctrl+A and Ctrl+E go to the start and end of the line, as
@@ -447,15 +464,9 @@ fn bool View.command(&self, uint rune, bool shift) {
 			if (shift) { self.redo(); } else { self.undo(); }
 		case 'y': self.redo();
 		case 'a': self.select_all();
-		case 'c':
-			clipboard.clear();
-			clipboard.append(self.selected_text());
-		case 'x':
-			clipboard.clear();
-			clipboard.append(self.selected_text());
-			self.insert_text("");
-		case 'v':
-			if (clipboard.len() > 0) self.insert_text(clipboard.str_view());
+		case 'c': self.copy();
+		case 'x': self.cut();
+		case 'v': self.paste();
 		default:
 			return false;
 	}
