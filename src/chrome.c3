@@ -24,6 +24,13 @@ fn void close_clicked(void* id, String id_str, int col, int row) @local {
 	// rl::close_window() here would yank GLFW out from under milktea
 	// mid-frame and leave it logging "GLFW library is not initialized" on
 	// every later raylib call.
+	// With unsaved changes the editor asks first, the same as Ctrl+Q.
+	Editor* e = (Editor*)id;
+	if (e && e.modified) {
+		e.quit_confirm.show();
+		e.quit_confirm.focused = 1;
+		return;
+	}
 	milktea::request_quit();
 }
 
@@ -50,13 +57,13 @@ fn xray::Node* light(glaze::Color bg, glaze::Color fg, xray::ClickFn on) @local 
 // window_lights builds the button strip. It is CHROME_CELLS wide, which is
 // what Editor.chrome_cells reserves at whichever end of the bar the platform
 // would have used, so the menu titles and their dropdowns start clear of it.
-fn xray::Node* window_lights(Theme* th) {
+fn xray::Node* window_lights(Theme* th, Editor* e) {
 	glaze::Style filler = { .bg = th.bar };
 	return milktea::hstack()
 		.height(milktea::cells(1))
 		.width(milktea::cells(CHROME_CELLS))
 		.add(milktea::text(filler, "").width(milktea::cells(1)))
-		.add(light(th.bar, glaze::color_hex("#ff5f57"), &close_clicked))
+		.add(light(th.bar, glaze::color_hex("#ff5f57"), &close_clicked).id_with(e))
 		.add(light(th.bar, glaze::color_hex("#febc2e"), &minimise_clicked))
 		.add(light(th.bar, glaze::color_hex("#28c840"), &zoom_clicked));
 }

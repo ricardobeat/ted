@@ -46,6 +46,7 @@ struct Editor {
 	Menu menu;
 	Dialog shortcuts;
 	Dialog about;
+	Dialog quit_confirm;
 	boba::FilePicker browser;
 	boba::Textarea textarea;
 	Theme theme;
@@ -99,6 +100,10 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 		"A minimal text editor\nbuilt with milktea.\n\nVersion 0.1.0",
 		"  OK  ", "Close");
 
+	self.quit_confirm = new_dialog("Unsaved changes",
+		"The current file has changes that\nhaven't been saved. Quit anyway?",
+		" Quit ", "Cancel");
+
 	self.browser = boba::new_file_picker(".");
 	self.browser.load_dir(".");
 	self.focus = FOCUS_EDITOR;
@@ -130,6 +135,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	if (try d = dialog_opt) {
 		if (d == "shortcuts") { self.shortcuts.show(); }
 		else if (d == "about") { self.about.show(); }
+		else if (d == "quit") { self.quit_confirm.show(); }
 		else if (d == "menu") { self.menu.open = true; }
 	}
 
@@ -283,6 +289,7 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	// Modal dialogs take precedence over the focus model.
 	if (self.shortcuts.open) return self.handle_shortcuts_key(k);
 	if (self.about.open) return self.handle_about_key(k);
+	if (self.quit_confirm.open) return self.handle_quit_confirm_key(k);
 
 	// While the dropdown is open, the menu owns every key (LEFT/RIGHT/UP/DOWN/
 	// ENTER/ESC). Anything else is ignored.
@@ -343,7 +350,7 @@ fn milktea::Cmd Editor.handle_ctrl_key(&self, milktea::KeyMsg k) {
 	switch (k.code) {
 		case milktea::KeyCode.RUNE:
 			switch (k.rune) {
-				case 'q': return milktea::quit();
+				case 'q': return self.quit();
 				case 's': self.save_file();
 				case 'n': self.new_file();
 				case 'o': self.focus = FOCUS_SIDEBAR_BROWSER;
@@ -444,7 +451,7 @@ fn milktea::Cmd Editor.run_menu_item(&self, String label) {
 			self.save_file();
 			self.focus = FOCUS_EDITOR;
 		case "Quit":
-			return milktea::quit();
+			return self.quit();
 		case "Shortcuts":
 			self.shortcuts.show();
 		case "About":
@@ -466,6 +473,20 @@ fn milktea::Cmd Editor.handle_shortcuts_key(&self, milktea::KeyMsg k) {
 			self.status_msg = "Ready";
 		default:
 	}
+	return null;
+}
+
+// quit leaves at once when there is nothing to lose, and otherwise asks
+// first. Ctrl+C stays an unconditional way out.
+fn milktea::Cmd Editor.quit(&self) {
+	if (!self.modified) return milktea::quit();
+	self.quit_confirm.show();
+	self.quit_confirm.focused = 1; // Cancel: a stray Enter shouldn't lose work
+	return null;
+}
+
+fn milktea::Cmd Editor.handle_quit_confirm_key(&self, milktea::KeyMsg k) {
+	if (self.quit_confirm.handle_key(k) == Pressed.CONFIRMED) return milktea::quit();
 	return null;
 }
 
@@ -494,6 +515,7 @@ fn milktea::Cmd Editor.handle_mouse_result(&self) {
 			self.status_msg = "Ready";
 		default:
 	}
+	if (self.quit_confirm.take_pending() == Pressed.CONFIRMED) return milktea::quit();
 	switch (self.about.take_pending()) {
 		case Pressed.CONFIRMED:
 			self.status_msg = "Ready";
@@ -605,9 +627,9 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	xray::Node* trail = null;
 	$if $feat(MILKTEA_GUI):
 		if (chrome_on_left()) {
-			lead = window_lights(th);
+			lead = window_lights(th, self);
 		} else {
-			trail = window_lights(th);
+			trail = window_lights(th, self);
 		}
 	$endif
 
@@ -618,7 +640,8 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 			.add(statusbar))
 		.add(self.menu.dropdown(BAR_ROWS, th))
 		.add(self.shortcuts.node(th, editor_area))
-		.add(self.about.node(th, editor_area)));
+		.add(self.about.node(th, editor_area))
+		.add(self.quit_confirm.node(th, editor_area)));
 }
 
 // The GUI build (ted-gui) supplies its own main() in gui_main.c3.
@@ -651,6 +674,7 @@ fn int dump_render() {
 	if (try d = dialog_opt) {
 		if (d == "shortcuts") { e.shortcuts.show(); }
 		else if (d == "about") { e.about.show(); }
+		else if (d == "quit") { e.quit_confirm.show(); }
 		else if (d == "menu") { e.menu.open = true; }
 	}
 

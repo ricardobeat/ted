@@ -55,7 +55,7 @@ fn Pressed Dialog.handle_key(&self, milktea::KeyMsg k) {
 			self.focused = (self.focused + 1) % DIALOG_BUTTONS;
 		case milktea::KeyCode.ENTER:
 			self.open = false;
-			return Pressed.CONFIRMED;
+			return self.focused == 0 ? Pressed.CONFIRMED : Pressed.DISMISSED;
 		default:
 	}
 	return Pressed.NOTHING;
