@@ -251,6 +251,40 @@ fn void View.paste(&self) {
 	}
 }
 
+// kill_line cuts whole lines, as Ctrl+K does in nano: each caret's line,
+// its line break included, wherever on the line the caret is; a selection
+// is cut as it is. Presses in a row add to what the one before cut, so a
+// run of them collects a block of lines to paste elsewhere. What was cut
+// goes on the clipboard.
+fn void View.kill_line(&self) {
+	@pool() {
+		DString killed = dstring::temp();
+		if (self.killing) killed.append(self.kill_buffer.str_view());
+		DString cut = dstring::temp();
+		Step* step = self.history.begin(DELETING, self.sels.array_view());
+		foreach (i : self.order_desc()) {
+			Selection s = self.sels[i];
+			sz start = s.start();
+			sz end = s.end();
+			if (s.is_empty()) {
+				int line = self.buf.line_of(start);
+				start = self.buf.line_start(line);
+				end = line + 1 < self.buf.line_count() ? self.buf.line_start(line + 1) : self.buf.len();
+			}
+			// Edited last to first, so each piece goes in front.
+			cut.insert_chars_at(0, self.buf.str()[start:end - start]);
+			self.apply(step, start, end, "");
+			self.sels[i] = caret(start);
+		}
+		killed.append(cut.str_view());
+		self.kill_buffer.clear();
+		self.kill_buffer.append(killed.str_view());
+		if (killed.len() > 0) milktea::set_clipboard(killed.str_view());
+		self.after_edit(step);
+	};
+	self.killing = true;
+}
+
 fn void View.select_all(&self) {
 	self.set_selections({ { .anchor = 0, .head = self.buf.len(), .goal_col = -1 } });
 	self.history.seal();
@@ -415,6 +449,9 @@ const bool MAC = env::DARWIN;
 // one of the editor's.
 fn bool View.handle_key(&self, milktea::KeyMsg k) {
 	if (self.completion_key(k)) return true;
+	// Only Ctrl+K pressed again adds to what the last one cut.
+	bool kill = k.code == RUNE && k.ctrl && k.rune == 'k';
+	if (!kill) self.killing = false;
 	bool handled = self.run_key(k);
 	// Typing a word character offers completions for the word; anything
 	// else — a move, a space, Backspace past the prefix — revisits or closes
@@ -462,6 +499,10 @@ fn bool View.run_key(&self, milktea::KeyMsg k) {
 }
 
 fn bool View.ctrl_key(&self, uint rune, bool shift) {
+	if (rune == 'k') {
+		self.kill_line();
+		return true;
+	}
 	if (MAC) {
 		switch (rune) {
 			case 'a': self.move(LINE_START, shift); return true;

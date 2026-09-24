@@ -28,6 +28,10 @@ struct View (xray::Content) {
 	// closers alternating.
 	List{String} pairs;
 	Completion completion;
+	// What the current run of Ctrl+K presses has cut, and whether the last
+	// key was one of them.
+	DString kill_buffer;
+	bool killing;
 	// Where the view was drawn last, on screen, for placing popups.
 	xray::Rect rect;
 
@@ -93,6 +97,7 @@ fn void View.init(&self) {
 	self.history.init();
 	self.pairs.init(mem);
 	self.completion.init();
+	self.kill_buffer.init(mem);
 	self.set_pairs(&DEFAULT_PAIRS);
 	self.text_width = 80;
 	self.height = 24;
@@ -110,6 +115,7 @@ fn void View.free(&self) {
 	self.history.free();
 	self.pairs.free();
 	self.completion.free();
+	self.kill_buffer.free();
 }
 
 // set_text replaces the whole document, as opening a file does: the caret
