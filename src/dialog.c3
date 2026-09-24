@@ -5,6 +5,9 @@ import glaze;
 import xray;
 
 const int DIALOG_BUTTONS = 2;
+// Dialogs hug their content up to this many cells, border included, so a
+// long body wraps rather than stretching a panel across the whole window.
+const int DIALOG_MAX_COLS = 60;
 
 struct Dialog {
 	String title;
@@ -12,7 +15,6 @@ struct Dialog {
 	Button[DIALOG_BUTTONS] buttons;
 	int focused;
 	bool open;
-	int min_cols;
 	Pressed pending;
 	ButtonSlot[DIALOG_BUTTONS] button_slots;
 }
@@ -33,7 +35,6 @@ fn Dialog new_dialog(String title, String body, String ok, String cancel) {
 		.title = title,
 		.body = body,
 		.buttons = { new_button(ok), new_button(cancel) },
-		.min_cols = 36,
 	};
 }
 
@@ -81,8 +82,9 @@ fn void backdrop_dismissed(void* id, String id_str, int col, int row) @local {
 }
 
 // node returns the dialog, centered within the editor area (not the full
-// screen, so it doesn't overlap the sidebar). Glaze sizes the panel from
-// its children — no manual width/height math.
+// screen, so it doesn't overlap the sidebar). The panel is a styled box sized
+// by the layout: it hugs the title, body and buttons, up to max_width, past
+// which the body wraps and the panel grows taller instead.
 fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 	if (!self.open) return null;
 
@@ -90,31 +92,19 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 		.bg = th.panel, .fg = th.text,
 		.border = glaze::ROUNDED, .border_color = th.accent,
 		.pad_top = 1, .pad_right = 2, .pad_bottom = 1, .pad_left = 2,
+		.max_width = DIALOG_MAX_COLS,
 	};
-	glaze::Style title_s = {
-		.fg = th.accent, .bg = th.panel, .bold = true,
-		.align_h = glaze::Position.LEFT,
-	};
-	glaze::Style body_s = {
-		.fg = th.text, .bg = th.panel,
-		.align_h = glaze::Position.LEFT,
-	};
+	glaze::Style title_s = { .fg = th.accent, .bg = th.panel, .bold = true };
+	glaze::Style body_s = { .fg = th.text, .bg = th.panel };
 
-	int widest = (int)glaze::string_width(self.title);
-	if (widest < self.min_cols) widest = self.min_cols;
-
-	xray::Node* panel_node = milktea::text(panel, "")
-		.width(milktea::cells(widest))
-		.with_padding(1, 2, 1, 2)
+	xray::Node* panel_node = milktea::vbox(panel)
 		.with_gap(1)
 		.center()
 		.shadow(milktea::shadow(2, 1).with_color(milktea::to_cell_color(th.shadow)));
 	panel_node.id_with(self).on_click_outside(&backdrop_dismissed);
 
-	String header = glaze::join_vertical_arr(glaze::Position.LEFT, {
-		title_s.render(self.title), "", body_s.render(self.body),
-	});
-	panel_node.add(milktea::text(body_s, header));
+	panel_node.add(milktea::text(title_s, self.title).fit_height());
+	panel_node.add(milktea::text(body_s, self.body).fit_height());
 
 	xray::Node* buttons_row = xray::hstack()
 		.with_gap(2)

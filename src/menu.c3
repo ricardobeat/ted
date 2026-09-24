@@ -211,7 +211,6 @@ fn xray::Node* Menu.dropdown(&self, int below, Theme* th) {
 	xray::Node* panel_node = milktea::text(panel, "")
 		.width(milktea::cells(self.item_width + ITEM_PAD * 2 + 2))
 		.height(milktea::cells(MENU_ITEMS + 2))
-		.with_padding(1, 1, 1, 1)
 		.at(self.title_x[self.selected] + self.x_inset, below)
 		.shadow(milktea::shadow(2, 1).with_color(milktea::to_cell_color(th.shadow)));
 	panel_node.id_with(self).on_click_outside(&dropdown_dismissed);

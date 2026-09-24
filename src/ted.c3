@@ -101,7 +101,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 		"  OK  ", "Close");
 
 	self.quit_confirm = new_dialog("Unsaved changes",
-		"The current file has changes that\nhaven't been saved. Quit anyway?",
+		"The current file has changes that haven't been saved. Quit anyway?",
 		" Quit ", "Cancel");
 
 	self.browser = boba::new_file_picker(".");
