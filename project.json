@@ -8,6 +8,7 @@
     "ted": {
       "type": "executable",
       "sources": [
+        "src/editor/**",
         "src/theme.c3",
         "src/button.c3",
         "src/dialog.c3",
@@ -22,6 +23,7 @@
     "ted-gui": {
       "type": "executable",
       "sources": [
+        "src/editor/**",
         "src/theme.c3",
         "src/button.c3",
         "src/dialog.c3",
