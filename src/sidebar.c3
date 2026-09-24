@@ -176,9 +176,9 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 
 	v.add(milktea::text(bg, "").height(milktea::cells(1)));
 
-	// "Files" header + browser tree.
-	v.add(milktea::text(bg, section_header(th, "Files"))
-		.height(milktea::cells(1)));
+	// The picker's tree_node() opens with its own "Files: <dir>" header, so
+	// the sidebar only adds its "Open" title. Adding a second "Files" header
+	// here would print the section label twice on top of each other.
 	v.add(ed.browser.tree_node().width(milktea::cells(SIDEBAR_WIDTH)));
 
 	return v;
