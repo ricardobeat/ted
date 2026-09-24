@@ -318,13 +318,14 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	if (self.menu.open) return self.handle_menu_key(k);
 
 	// '?' opens shortcuts from anywhere.
-	if (k.code == milktea::KeyCode.RUNE && k.rune == '?' && !k.ctrl) {
+	if (k.code == milktea::KeyCode.RUNE && k.rune == '?' && !k.ctrl && !k.super) {
 		self.shortcuts.show();
 		return null;
 	}
 
 	// Global Ctrl shortcuts work in any focus.
-	if (k.ctrl) return self.handle_ctrl_key(k);
+	// Ctrl or, in the GUI, Cmd: ted's shortcuts answer to either.
+	if (k.ctrl || k.super) return self.handle_ctrl_key(k);
 
 	// From the editor, TAB is indentation like any other key: the editor
 	// handles it and focus does not move. Only ESC leaves the editor, into
@@ -526,7 +527,7 @@ fn milktea::Cmd Editor.quit(&self) {
 fn milktea::Cmd Editor.handle_quit_confirm_key(&self, milktea::KeyMsg k) {
 	// Ctrl+Q again means "yes, quit", so it takes two presses to leave with
 	// unsaved changes rather than a trip to the Quit button.
-	if (k.ctrl && k.code == milktea::KeyCode.RUNE && k.rune == 'q') return milktea::quit();
+	if ((k.ctrl || k.super) && k.code == milktea::KeyCode.RUNE && k.rune == 'q') return milktea::quit();
 	if (self.quit_confirm.handle_key(k) == Pressed.CONFIRMED) return milktea::quit();
 	return null;
 }

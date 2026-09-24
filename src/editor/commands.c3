@@ -2,6 +2,7 @@ module ted::editor;
 
 import milktea;
 import std::collections::list;
+import std::core::env;
 
 // Commands are what the editor can do — move, select, edit, undo — as plain
 // functions on the view, each acting on every selection. handle_key() at the
@@ -385,15 +386,24 @@ fn sz next_char(String t, sz pos) {
 // the system clipboard is the host's to wire up.
 DString clipboard;
 
+// The key map, per platform. On macOS, Cmd is the command key (select all,
+// clipboard, undo) and moves to the ends of lines and the document; Option
+// moves by words; Ctrl+A and Ctrl+E go to the start and end of the line, as
+// in every macOS text field. Elsewhere Ctrl does all of that, and Home/End
+// take the ends of lines. A terminal never sees Cmd, so on a Mac the Ctrl
+// forms of undo and the clipboard work too.
+const bool MAC = env::DARWIN;
+
 // handle_key runs the command a key is bound to, reporting whether it was
 // one of the editor's.
 fn bool View.handle_key(&self, milktea::KeyMsg k) {
-	bool word = k.ctrl || k.alt;
+	bool word = k.alt || k.ctrl;
+	bool cmd = MAC && k.super;
 	switch (k.code) {
-		case LEFT: self.move(word ? WORD_LEFT : CHAR_LEFT, k.shift);
-		case RIGHT: self.move(word ? WORD_RIGHT : CHAR_RIGHT, k.shift);
-		case UP: self.move(ROW_UP, k.shift);
-		case DOWN: self.move(ROW_DOWN, k.shift);
+		case LEFT: self.move(cmd ? LINE_START : word ? WORD_LEFT : CHAR_LEFT, k.shift);
+		case RIGHT: self.move(cmd ? LINE_END : word ? WORD_RIGHT : CHAR_RIGHT, k.shift);
+		case UP: self.move(cmd ? DOC_START : ROW_UP, k.shift);
+		case DOWN: self.move(cmd ? DOC_END : ROW_DOWN, k.shift);
 		case HOME: self.move(k.ctrl ? DOC_START : LINE_START, k.shift);
 		case END: self.move(k.ctrl ? DOC_END : LINE_END, k.shift);
 		case PAGE_UP: self.move(PAGE_UP, k.shift);
@@ -402,11 +412,12 @@ fn bool View.handle_key(&self, milktea::KeyMsg k) {
 		case BACKSPACE: self.delete_back(word);
 		case DELETE: self.delete_forward(word);
 		// Terminals report Ctrl+C as a key of its own.
-		case CTRL_C: return self.handle_ctrl('c', false);
+		case CTRL_C: return self.command('c', false);
 		case TAB:
 			if (k.shift) { self.indent_lines(false); } else { self.tab(); }
 		case RUNE:
-			if (k.ctrl) return self.handle_ctrl(k.rune, k.shift);
+			if (k.super) return self.command(k.rune, k.shift);
+			if (k.ctrl) return self.ctrl_key(k.rune, k.shift);
 			if (k.alt) return false;
 			DString s = dstring::temp();
 			s.append_char32(k.rune);
@@ -417,7 +428,20 @@ fn bool View.handle_key(&self, milktea::KeyMsg k) {
 	return true;
 }
 
-fn bool View.handle_ctrl(&self, uint rune, bool shift) {
+fn bool View.ctrl_key(&self, uint rune, bool shift) {
+	if (MAC) {
+		switch (rune) {
+			case 'a': self.move(LINE_START, shift); return true;
+			case 'e': self.move(LINE_END, shift); return true;
+			default:
+		}
+	}
+	return self.command(rune, shift);
+}
+
+// command runs what the command key does with a letter: Cmd on macOS, Ctrl
+// elsewhere.
+fn bool View.command(&self, uint rune, bool shift) {
 	switch (rune) {
 		case 'z':
 			if (shift) { self.redo(); } else { self.undo(); }
