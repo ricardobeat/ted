@@ -27,6 +27,9 @@ struct View (xray::Content) {
 	// Brackets and quotes that pair up as they are typed, openers and
 	// closers alternating.
 	List{String} pairs;
+	Completion completion;
+	// Where the view was drawn last, on screen, for placing popups.
+	xray::Rect rect;
 
 	// Scroll position: the first line on screen, and how many of its wrapped
 	// rows are above the top.
@@ -89,6 +92,7 @@ fn void View.init(&self) {
 	self.layers.init(mem);
 	self.history.init();
 	self.pairs.init(mem);
+	self.completion.init();
 	self.set_pairs(&DEFAULT_PAIRS);
 	self.text_width = 80;
 	self.height = 24;
@@ -105,6 +109,7 @@ fn void View.free(&self) {
 	self.layers.free();
 	self.history.free();
 	self.pairs.free();
+	self.completion.free();
 }
 
 // set_text replaces the whole document, as opening a file does: the caret
@@ -115,6 +120,7 @@ fn void View.set_text(&self, String s) {
 	self.sels.push(caret(0));
 	foreach (&l : self.layers) l.clear();
 	self.history.clear();
+	self.completion.close();
 	self.top_line = 0;
 	self.top_row = 0;
 }
@@ -415,6 +421,7 @@ fn bool same_style(glaze::Style* a, glaze::Style* b) @local {
 
 fn String View.render(&self, xray::Rect r) @dynamic {
 	int gutter = self.gutter_width();
+	self.rect = r;
 	self.text_width = r.w - gutter;
 	self.height = r.h;
 	if (self.text_width < 1) self.text_width = 1;

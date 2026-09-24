@@ -414,6 +414,22 @@ const bool MAC = env::DARWIN;
 // handle_key runs the command a key is bound to, reporting whether it was
 // one of the editor's.
 fn bool View.handle_key(&self, milktea::KeyMsg k) {
+	if (self.completion_key(k)) return true;
+	bool handled = self.run_key(k);
+	// Typing a word character offers completions for the word; anything
+	// else — a move, a space, Backspace past the prefix — revisits or closes
+	// the list.
+	if (k.code == RUNE && !k.ctrl && !k.super && !k.alt && k.rune < 0x80 && is_word((char)k.rune)) {
+		self.update_completion();
+	} else if (k.code == BACKSPACE && self.completion.open) {
+		self.update_completion();
+	} else {
+		self.completion.close();
+	}
+	return handled;
+}
+
+fn bool View.run_key(&self, milktea::KeyMsg k) {
 	bool word = k.alt || k.ctrl;
 	bool cmd = MAC && k.super;
 	switch (k.code) {

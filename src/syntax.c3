@@ -10,6 +10,7 @@ import ink::lexer;
 import ink::grammars;
 import ink::helix;
 import ink::tree;
+import std::collections::list;
 import std::os::env;
 
 // Syntax highlighting, by ink: a tree-sitter grammar parses the buffer, the
@@ -189,4 +190,40 @@ fn editor::Context Syntax.context_at(&self, sz pos) @dynamic {
 fn String? Syntax.tag_to_close(&self, sz pos) @dynamic {
 	tree::Tree* t = self.parsed()!;
 	return t.tag_to_close(pos);
+}
+
+// completions offers the file's identifiers and the keywords it uses: the
+// leaves of its syntax tree that name something (identifiers, types, fields,
+// properties, tags) or that are words of the language itself.
+fn void Syntax.completions(&self, sz pos, String prefix, List{String}* out) @dynamic {
+	tree::Tree*? t = self.parsed();
+	if (catch t) {
+		self.view.buffer_words(pos - prefix.len, out);
+		return;
+	}
+	List{tree::Node} stack;
+	stack.init(tmem);
+	stack.push(t.root());
+	while (stack.len() > 0) {
+		tree::Node n = stack.pop()!!;
+		uint count = n.child_count();
+		if (count > 0) {
+			for (uint i = 0; i < count; i++) stack.push(n.child(i));
+			continue;
+		}
+		// The word being typed is not its own completion.
+		if (n.start() == pos - prefix.len) continue;
+		if (n.is_named() ? names_something(n.kind()) : is_keyword(n.kind())) out.push(n.text());
+	}
+}
+
+fn bool names_something(String kind) @local {
+	return kind.contains("identifier") || kind.contains("name") || kind == "ident"
+		|| kind.ends_with("_ident") || kind == "type" || kind == "property";
+}
+
+fn bool is_keyword(String kind) @local {
+	if (kind.len < 2) return false;
+	foreach (c : kind) if (!c.is_alpha() && c != '_') return false;
+	return true;
 }

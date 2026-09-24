@@ -343,6 +343,11 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 		self.cycle_focus();
 		return null;
 	}
+	// An open completion list takes Esc before anything else does.
+	if (k.code == milktea::KeyCode.ESC && self.focus == FOCUS_EDITOR && self.doc.completing()) {
+		self.doc.completion.close();
+		return null;
+	}
 	if (k.code == milktea::KeyCode.ESC) {
 		if (self.focus != FOCUS_EDITOR) {
 			self.focus_editor();
@@ -677,6 +682,9 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 			.add(self.menu.bar(th, self.focus == FOCUS_MENU_BAR, lead, trail))
 			.add(editor_row)
 			.add(statusbar))
+		.add(self.doc.completion_node(
+			glaze::style().foreground(th.bar_text).background(th.bar),
+			glaze::style().foreground(th.ink).background(th.accent)))
 		.add(self.menu.dropdown(BAR_ROWS, th))
 		.add(self.shortcuts.node(th, editor_area))
 		.add(self.about.node(th, editor_area))

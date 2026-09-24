@@ -1,5 +1,7 @@
 module ted::editor;
 
+import std::collections::list;
+
 // Assist is what the editor asks of whoever knows the language of its text:
 // whether a position is in code, a string or a comment, and which tag a
 // just-finished start tag should be closed with. The editor knows nothing
@@ -8,6 +10,9 @@ module ted::editor;
 interface Assist {
 	fn Context context_at(sz pos) @optional;
 	fn String? tag_to_close(sz pos) @optional;
+	// Words that could complete prefix, which ends at pos. They are
+	// filtered and ordered by the editor; slices of temp memory will do.
+	fn void completions(sz pos, String prefix, List{String}* out) @optional;
 }
 
 enum Context : char {
