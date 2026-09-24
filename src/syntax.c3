@@ -7,34 +7,21 @@ import ink::style;
 import ink::colour;
 import ink::themes;
 import ink::lexer;
-import ink::lang_registry;
-import ink::ts_bind;
+import ink::grammars;
 import std::os::env;
+import std::collections::list;
 
 // Syntax highlighting, by ink: a tree-sitter grammar parses the buffer, the
 // grammar's highlight query names the parts, and a theme colors them. The
 // result goes to the textarea as highlight spans, which it draws over the
 // editor's own style.
 //
-// Grammars are shared libraries in vendor/ink.c3l/grammars, loaded when the
-// first file is highlighted; the queries are compiled in. A file whose
-// extension no grammar claims, or a build run from somewhere the grammars
-// can't be found, is shown plain.
-
-extern fn void* dlopen(char* filename, int flag);
-extern fn void* dlsym(void* handle, char* symbol);
-const int RTLD_NOW = 2;
-
-alias TsLanguageFn = fn ts_bind::TSLanguage*();
-
-const char[] QUERY_C = $embed("../vendor/ink.c3l/data/queries/c/highlights.scm");
-const char[] QUERY_C3 = $embed("../vendor/ink.c3l/data/queries/c3/highlights.scm");
-const char[] QUERY_GO = $embed("../vendor/ink.c3l/data/queries/go/highlights.scm");
-const char[] QUERY_PYTHON = $embed("../vendor/ink.c3l/data/queries/python/highlights.scm");
-const char[] QUERY_RUST = $embed("../vendor/ink.c3l/data/queries/rust/highlights.scm");
+// ink picks the language from the file name and loads its grammar and query
+// from vendor/ink.c3l the first time a file needs them. A file no grammar
+// claims, or a build run from somewhere ink.c3l can't be found, is shown
+// plain.
 
 const String SYNTAX_THEME = "monokai";
-const int MAX_SPANS = 4096;
 const int MAX_PATH = 256;
 
 struct Syntax {
@@ -47,53 +34,32 @@ struct Syntax {
 	// The text the spans were made from, to tell when they're stale.
 	char[4096] text_buf;
 	sz text_len;
-	// Heap-allocated on load: a span carries a whole glaze style, so a full
-	// set is too big to live in the Editor, which sits on the stack.
-	boba::HighlightSpan[] spans;
-	int span_count;
+	list::List{boba::HighlightSpan} spans;
 }
 
-// grammar_dirs are where the grammars may be: beside the working directory
-// (running from the repo) or beside the executable (out/ted).
-fn String[] grammar_dirs() @local {
+// ink_roots are where ink.c3l may be: under the working directory (running
+// from the repo) or beside the executable (out/ted).
+fn String[] ink_roots() @local {
 	String dir = "";
 	if (try exe = env::executable_path()) {
 		for (sz i = exe.len; i > 0; i--) {
 			if (exe[i - 1] == '/') { dir = exe[:i - 1]; break; }
 		}
 	}
-	String[] dirs = mem::talloc_array(String, 3);
-	dirs[0] = "vendor/ink.c3l/grammars";
-	dirs[1] = string::tformat("%s/../vendor/ink.c3l/grammars", dir);
-	dirs[2] = string::tformat("%s/vendor/ink.c3l/grammars", dir);
-	return dirs;
-}
-
-fn void load_grammar(String name, String[] aliases, String[] extensions, String query) @local {
-	ZString sym = string::tformat("tree_sitter_%s", name).zstr_tcopy();
-	foreach (dir : grammar_dirs()) {
-		ZString lib = string::tformat("%s/libtree-sitter-%s.dylib", dir, name).zstr_tcopy();
-		void* h = dlopen(lib, RTLD_NOW);
-		if (h == null) continue;
-		TsLanguageFn make = (TsLanguageFn)dlsym(h, sym);
-		if (make == null) continue;
-		ts_bind::TSLanguage* lang = make();
-		if (lang == null) continue;
-		lang_registry::register_language(name, aliases, extensions, lang, query);
-		return;
-	}
+	String[] roots = mem::talloc_array(String, 3);
+	roots[0] = "vendor/ink.c3l";
+	roots[1] = string::tformat("%s/../vendor/ink.c3l", dir);
+	roots[2] = string::tformat("%s/vendor/ink.c3l", dir);
+	return roots;
 }
 
 fn void Syntax.load(&self) {
 	self.loaded = true;
-	self.spans = mem::new_array(boba::HighlightSpan, MAX_SPANS);
+	// The spans are rebuilt inside a temp pool; set the heap allocator up
+	// front, or the list would take the pool's and lose its storage with it.
+	self.spans.init(mem);
 	themes::register_all_themes();
 	self.theme = style::styles_get(SYNTAX_THEME);
-	load_grammar("c", { "c" }, { ".c", ".h" }, (String)QUERY_C);
-	load_grammar("c3", { "c3" }, { ".c3", ".c3i" }, (String)QUERY_C3);
-	load_grammar("go", { "go", "golang" }, { ".go" }, (String)QUERY_GO);
-	load_grammar("python", { "python", "py" }, { ".py" }, (String)QUERY_PYTHON);
-	load_grammar("rust", { "rust", "rs" }, { ".rs" }, (String)QUERY_RUST);
 }
 
 // span_style turns a theme entry into what the textarea draws a span with.
@@ -124,7 +90,7 @@ fn void Syntax.highlight(&self, boba::Textarea* ta, String path) {
 		self.path_len = n;
 		self.lexer = null;
 		if (path.len > 0 && self.theme != null) {
-			if (try l = lang_registry::find_lexer_by_filename(path)) self.lexer = l;
+			if (try l = grammars::lexer_for_file(path, ink_roots())) self.lexer = l;
 		}
 		stale = true;
 	}
@@ -137,20 +103,20 @@ fn void Syntax.highlight(&self, boba::Textarea* ta, String path) {
 	if (stale || text != (String)self.text_buf[:self.text_len]) {
 		self.text_buf[:text.len] = text[..];
 		self.text_len = text.len;
-		self.span_count = 0;
+		self.spans.clear();
 		@pool() {
 			if (try it = self.lexer.tokenise(text)) {
 				sz at = 0;
 				while (try tok = token::token_iterator_next(it)) {
 					style::StyleEntry e = style::style_get(self.theme, tok.type);
 					bool styled = colour::colour_is_set(e.fg) || e.bold || e.italic || e.underline;
-					if (styled && tok.value.len > 0 && self.span_count < MAX_SPANS) {
-						self.spans[self.span_count++] = { .start = at, .len = tok.value.len, .style = span_style(e) };
+					if (styled && tok.value.len > 0) {
+						self.spans.push({ .start = at, .len = tok.value.len, .style = span_style(e) });
 					}
 					at += tok.value.len;
 				}
 			}
 		};
 	}
-	ta.highlights = self.spans[:self.span_count];
+	ta.highlights = self.spans.array_view();
 }
