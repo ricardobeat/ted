@@ -499,8 +499,13 @@ fn bool View.run_key(&self, milktea::KeyMsg k) {
 }
 
 fn bool View.ctrl_key(&self, uint rune, bool shift) {
+	// nano's cut and paste: Ctrl+K cuts lines, Ctrl+U puts them back.
 	if (rune == 'k') {
 		self.kill_line();
+		return true;
+	}
+	if (rune == 'u') {
+		self.paste();
 		return true;
 	}
 	if (MAC) {
