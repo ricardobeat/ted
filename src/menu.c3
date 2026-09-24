@@ -10,6 +10,7 @@ struct MenuItem {
 }
 
 const int ITEM_PAD = 1;
+const int ITEM_GAP = 2;
 
 const int MENU_COLS  = 4;
 const int MENU_ITEMS = 4;
@@ -53,7 +54,9 @@ enum Chosen {
 	PICKED,
 }
 
-fn Menu new_menu(String[MENU_COLS] titles, int item_width = 20) {
+// item_width is the narrowest a dropdown gets, border included; one with
+// longer items grows to fit them.
+fn Menu new_menu(String[MENU_COLS] titles, int item_width = 24) {
 	Menu m = { .titles = titles, .item_width = item_width };
 	int x = 0;
 	for (int i = 0; i < MENU_COLS; i++) {
@@ -176,9 +179,8 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 	for (int i = 0; i < MENU_COLS; i++) {
 		self.title_slots[i] = { .menu = self, .index = i };
 		bool highlighted = (focused || self.open) && i == self.selected;
-		String label = (highlighted ? active : bar).render(self.titles[i]);
-		xray::Node* title_node = milktea::text(bar, label)
-			.width(milktea::cells(glaze::string_width(self.titles[i])));
+		xray::Node* title_node = milktea::text(highlighted ? active : bar, self.titles[i])
+			.fit_width();
 		title_node.id_with(&self.title_slots[i]).on_click(&title_clicked);
 		row.add(title_node);
 	}
@@ -187,30 +189,32 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 	return row;
 }
 
+// item_row lays a label against its shortcut key: a padded box that pushes
+// the key to the right edge, however wide the panel turns out, and keeps at
+// least ITEM_GAP between them when the panel is sized to its widest row.
 fn xray::Node* Menu.item_row(&self, MenuItem mi, glaze::Style base) {
-	xray::Node* bg = milktea::text(base, "").height(milktea::cells(1));
-	xray::Node* row = xray::hstack()
+	return milktea::hbox(base.pad_x(ITEM_PAD))
 		.with_justify(xray::JustifyContent.JUSTIFY_SPACE_BETWEEN)
-		.with_padding(0, ITEM_PAD, 0, ITEM_PAD);
-	row.add(milktea::text(base, mi.label).width(milktea::cells(glaze::string_width(mi.label))));
-	row.add(milktea::text(base, mi.key).width(milktea::cells(glaze::string_width(mi.key))));
-	bg.add(row);
-	return bg;
+		.with_gap(ITEM_GAP)
+		.fit_height()
+		.add(milktea::text(base, mi.label).fit_width())
+		.add(milktea::text(base, mi.key).fit_width());
 }
 
+// dropdown is a bordered box of item rows, as wide as its widest row but no
+// narrower than item_width, placed under the open title.
 fn xray::Node* Menu.dropdown(&self, int below, Theme* th) {
 	if (!self.open) return null;
 
 	glaze::Style panel = {
 		.bg = th.bar, .fg = th.bar_text,
 		.border = glaze::NORMAL, .border_color = th.text,
+		.min_width = self.item_width,
 	};
 	glaze::Style selected = { .bg = th.ink, .fg = th.accent, .bold = true };
 	glaze::Style item = { .bg = th.bar, .fg = th.bar_text };
 
-	xray::Node* panel_node = milktea::text(panel, "")
-		.width(milktea::cells(self.item_width + ITEM_PAD * 2 + 2))
-		.height(milktea::cells(MENU_ITEMS + 2))
+	xray::Node* panel_node = milktea::vbox(panel)
 		.at(self.title_x[self.selected] + self.x_inset, below)
 		.shadow(milktea::shadow(2, 1).with_color(milktea::to_cell_color(th.shadow)));
 	panel_node.id_with(self).on_click_outside(&dropdown_dismissed);

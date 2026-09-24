@@ -593,25 +593,20 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	// Editor area with 1-cell padding on every side, so the textarea and
 	// line-number gutter sit inside a margin rather than flush against the
 	// sidebar and the status bar.
-	glaze::Style editor_pad = { .bg = th.editor_bg };
-	xray::Node* editor_padded = milktea::text(editor_pad, "")
-		.with_padding(1, 1, 1, 1);
-	editor_padded.add(self.textarea.node().fill(1));
-	editor_row.add(editor_padded.fill(1));
+	editor_row.add(milktea::vbox(glaze::style().background(th.editor_bg).pad(1))
+		.fill(1)
+		.add(self.textarea.node().fill(1)));
 
 	xray::Node* status_row = milktea::hstack()
 		.height(milktea::cells(1))
 		.add(milktea::text(status_style, hint_label).fill(1))
-		.add(milktea::text(status_style, right_info)
-			.width(milktea::cells(glaze::string_width(right_info))));
+		.add(milktea::text(status_style, right_info).fit_width());
 
-	// The padding cells are the bar's own background, not the window's, so
-	// the whole strip still reads as one bar: an empty text node carries the
-	// style across the ends the row of hints no longer reaches.
-	xray::Node* statusbar = milktea::text(status_style, "")
+	// The padding is the bar's own, so the whole strip reads as one bar out
+	// to the ends the row of hints does not reach.
+	xray::Node* statusbar = milktea::vbox(status_style.pad_x(STATUS_PAD))
 		.height(milktea::cells(STATUS_ROWS))
-		.with_padding(0, STATUS_PAD, 0, STATUS_PAD);
-	statusbar.add(status_row);
+		.add(status_row);
 
 	xray::Rect editor_area = {
 		.x = SIDEBAR_WIDTH,
