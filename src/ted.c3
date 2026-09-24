@@ -653,7 +653,7 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	self.doc.scrollbar_thumb_style = thumb.with_bold(true);
 	self.syntax.highlight(&self.doc, self.current_file);
 
-	self.browser.width = SIDEBAR_WIDTH;
+	self.browser.width = sidebar_content_width(self);
 	self.browser.height = editor_h;
 
 	xray::Node* editor_row = milktea::hstack().fill(1);
@@ -677,10 +677,11 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		.height(milktea::cells(STATUS_ROWS))
 		.add(status_row);
 
+	int sidebar_w = sidebar_panel_width(self);
 	xray::Rect editor_area = {
-		.x = SIDEBAR_WIDTH,
+		.x = sidebar_w,
 		.y = BAR_ROWS,
-		.w = self.win_w - SIDEBAR_WIDTH,
+		.w = self.win_w - sidebar_w,
 		.h = self.win_h - BAR_ROWS - STATUS_ROWS,
 	};
 
@@ -762,5 +763,9 @@ fn int dump_render() {
 		plain.append_char(c);
 	}
 	io::printfn("%s", plain.str_view());
+	// Find and print every literal ` character (not in escape)
+	for (usz i = 0; i < captured.len; i++) {
+		if (captured[i] == 0x60) io::printfn("BACKTICK at %d", i);
+	}
 	return 0;
 }
