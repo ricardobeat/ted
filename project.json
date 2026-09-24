@@ -4,13 +4,6 @@
     "no-unused-parameter",
     "no-unused-import"
   ],
-  "sources": [
-    "vendor/milktea/milktea/**",
-    "vendor/milktea/glaze/**",
-    "vendor/milktea/xray/**",
-    "vendor/milktea/xray/layout/**",
-    "vendor/milktea/boba/**"
-  ],
   "targets": {
     "ted": {
       "type": "executable",
@@ -21,9 +14,6 @@
         "src/menu.c3",
         "src/sidebar.c3",
         "src/ted.c3"
-      ],
-      "c-sources": [
-        "vendor/milktea/milktea/tty_winsize.c"
       ],
       "opt": "Os",
       "strip-unused": true
@@ -42,14 +32,10 @@
         "vendor/milktea/milktea-gui/**"
       ],
       "c-sources": [
-        "vendor/milktea/milktea/tty_winsize.c",
         "vendor/milktea/milktea-gui/macos_window.c"
       ],
       "features": [
         "MILKTEA_GUI"
-      ],
-      "dependency-search-paths": [
-        "vendor/milktea"
       ],
       "dependencies": [
         "raylib6"
@@ -57,5 +43,15 @@
       "opt": "Os",
       "strip-unused": true
     }
-  }
+  },
+  "dependency-search-paths": [
+    "vendor/milktea",
+    "vendor/milktea/lib"
+  ],
+  "dependencies": [
+    "milktea",
+    "glaze",
+    "xray",
+    "boba"
+  ]
 }
