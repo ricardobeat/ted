@@ -177,8 +177,9 @@ fn void use_app_font() @local {
 // and exits. That is how the layout is inspected without a human watching.
 // Raylib only writes screenshots inside its working directory, so put a
 // relative path there (for example TED_SHOT=out/ted.png).
-fn int main() {
+fn int main(String[] args) {
 	Editor e = { };
+	if (args.len > 1) e.open_arg = args[1];
 	// The window has no title bar of its own and no buttons from the
 	// platform either: the top row of the view stands in for both, drawing
 	// its own close/minimise/zoom glyphs (see chrome.c3) and letting a drag

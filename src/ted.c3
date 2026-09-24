@@ -67,6 +67,10 @@ struct Editor {
 	// the platform (see gui_main.c3); zero in the terminal.
 	int chrome_cells;
 	Focus focus;
+	// The path named on the command line, set by main() before the program
+	// starts. It may not exist yet: then the buffer starts empty under that
+	// name and the file appears on the first save.
+	String open_arg;
 	String current_file;
 	String status_msg;
 	bool modified;
@@ -131,6 +135,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	if (try path = open_opt) {
 		open_from_env(self, path);
 	}
+	if (self.open_arg.len > 0) self.open_path(self.open_arg);
 	String? dialog_opt = std::os::env::tget_var("TED_DIALOG");
 	if (try d = dialog_opt) {
 		if (d == "shortcuts") { self.shortcuts.show(); }
@@ -202,6 +207,22 @@ fn void Editor.load_file(&self, String path) {
 	self.status_msg = string::tformat("Opened: %s", path);
 }
 
+// open_path opens the file at `path`, or, when there is none yet, starts an
+// empty buffer that will be written there on save. Nothing touches the disk
+// until then.
+fn void Editor.open_path(&self, String path) {
+	if (file::exists(path)) {
+		self.load_file(path);
+		return;
+	}
+	self.textarea.clear();
+	self.current_file = path;
+	self.modified = false;
+	int idx = self.open_file_add(path);
+	if (idx >= 0) self.active_file = idx;
+	self.status_msg = string::tformat("New file: %s", path);
+}
+
 fn void Editor.save_file(&self) {
 	if (self.current_file.len == 0) {
 		self.status_msg = "No file to save";
@@ -235,6 +256,9 @@ fn void Editor.activate_file(&self, int idx) {
 	self.active_file = idx;
 	self.current_file = path;
 	self.textarea.clear();
+	self.modified = false;
+	// A file named on the command line but never saved has nothing on disk.
+	if (!file::exists(path)) return;
 	char[]? data = file::load_temp(path);
 	if (catch err = data) {
 		self.status_msg = string::tformat("Error: could not read %s", path);
@@ -640,12 +664,10 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 }
 
 // The GUI build (ted-gui) supplies its own main() in gui_main.c3.
-fn int main(int argc, char** argv) @feat(!MILKTEA_GUI) {
-	if (argc > 1) {
-		String a = ((ZString)argv[1]).str_view();
-		if (a == "--render") return dump_render();
-	}
+fn int main(String[] args) @feat(!MILKTEA_GUI) {
+	if (args.len > 1 && args[1] == "--render") return dump_render();
 	Editor e = { };
+	if (args.len > 1) e.open_arg = args[1];
 	return milktea::@run(&e);
 }
 
