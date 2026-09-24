@@ -699,7 +699,8 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		.add(self.menu.dropdown(BAR_ROWS, th))
 		.add(self.shortcuts.node(th, editor_area))
 		.add(self.about.node(th, editor_area))
-		.add(self.quit_confirm.node(th, editor_area)));
+		.add(self.quit_confirm.node(th, editor_area)))
+		.set_mouse_mode(milktea::MouseMode.MOUSE_MODE_ALL_MOTION);
 }
 
 // The GUI build (ted-gui) supplies its own main() in gui_main.c3.
