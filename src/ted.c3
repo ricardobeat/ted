@@ -44,6 +44,9 @@ struct OpenFile {
 }
 
 const int MAX_OPEN_FILES = 16;
+// File-navigator rows visible at once. The picker keeps up to 64 entries;
+// this caps the per-row click slots the sidebar holds on the Editor.
+const int MAX_BROWSER_ROWS = 64;
 
 struct Editor {
 	Menu menu;
@@ -68,6 +71,12 @@ struct Editor {
 	// view().
 	FileSlot[MAX_OPEN_FILES] file_slots;
 	int file_hover;
+	// Same role for the file-navigator rows: a stable pointer per row plus
+	// the row under the pointer. The browser owns its own data — names,
+	// is_dirs, current_dir — but the click and hover handlers live here so
+	// the sidebar can apply one style across both panels.
+	BrowserSlot[MAX_BROWSER_ROWS] browser_slots;
+	int browser_hover;
 
 	// Cells reserved at the left of the top bar for window buttons drawn by
 	// the platform (see gui_main.c3); zero in the terminal.

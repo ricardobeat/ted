@@ -92,6 +92,38 @@ fn void browser_row_clicked(void* id, String name, bool is_dir, int col, int row
 	}
 }
 
+// BrowserSlot is the per-row id that the click handler reads to know which
+// row in the file navigator was hit. The address is stable across frames
+// because the slot lives on the Editor (the picker's own PickRowCtx, in
+// contrast, is allocated fresh on tmem each frame).
+struct BrowserSlot {
+	Editor* ed;
+	int index;
+}
+
+fn void browser_row_index_clicked(void* id, String id_str, int col, int row) @local {
+	BrowserSlot* s = (BrowserSlot*)id;
+	Editor* ed = s.ed;
+	int i = s.index;
+	if (i < 0 || i >= ed.browser.count) return;
+	// Keep the picker's own state in sync: a click should move the keyboard
+	// cursor there too, so the next arrow key continues from the same row.
+	ed.browser.cursor = i;
+	ed.browser.selected = i;
+	String name = (String)ed.browser.names[i][:ed.browser.name_lens[i]];
+	browser_row_clicked(ed, name, ed.browser.is_dirs[i], col, row);
+}
+
+fn void browser_row_hover_in(void* id, String id_str, int col, int row) @local {
+	BrowserSlot* s = (BrowserSlot*)id;
+	s.ed.browser_hover = s.index;
+}
+
+fn void browser_row_hover_out(void* id, String id_str, int col, int row) @local {
+	BrowserSlot* s = (BrowserSlot*)id;
+	if (s.ed.browser_hover == s.index) s.ed.browser_hover = -1;
+}
+
 // ── Textarea press handler ──────────────────────────────────────────────────
 //
 // A click inside the editor body puts the caret where it landed — the view
@@ -123,10 +155,16 @@ fn void editor_pressed(void* id) @local {
 // list ever carry a click handler.
 
 // sidebar_tree builds the sidebar as a clickable node tree. Each open-file row
-// is its own node with on_click + on_hover_in/out; the browser is the picker's
-// own tree_node() (which exposes per-row clicks the same way). The editor
-// view's on_press hooks the editor body so a click there focuses it. Focus
-// is not consulted anywhere — clicks work from any state.
+// is its own node with on_click + on_hover_in/out; the file-navigator rows are
+// the same shape, so UP/DOWN read as one continuous list. The editor view's
+// on_press hooks the editor body so a click there focuses it. Focus is not
+// consulted anywhere — clicks work from any state.
+//
+// The file-navigator rows are rendered in ted rather than via the picker's
+// own tree_node(). The picker draws its cursor row with a `> ` caret in its
+// own magenta style; the sidebar wants the cursor row to use the same accent
+// highlight as the active file row, with no caret prefix — the two panels
+// reading as one list means the highlight rules should be the same too.
 fn xray::Node* sidebar_tree(Editor* ed) {
 	Theme* th = &ed.theme;
 	glaze::Style bg = { .bg = th.browser_bg, .fg = th.browser_fg };
@@ -148,6 +186,13 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 		v.add(milktea::text(empty_row, string::tformat("%s(none)", SIDEBAR_PAD))
 			.height(milktea::cells(1)));
 	} else {
+		// The ▸ marker on the active file is always shown — the user needs to
+		// see which file is in the editor from anywhere. The accent highlight,
+		// though, belongs to the sidebar's keyboard cursor, which lives in
+		// only one panel at a time: the open files panel when focus is on
+		// it, the file-navigator otherwise. Highlighting both rows at once
+		// would say "two things are selected" and confuse the arrows.
+		bool files_active = ed.focus == FOCUS_SIDEBAR_FILES;
 		for (int i = 0; i < ed.open_file_count; i++) {
 			OpenFile* f = &ed.open_files[i];
 			String path = (String)f.path_buf[:f.path_len];
@@ -156,12 +201,8 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 			String prefix = is_current ? SIDEBAR_MARK : SIDEBAR_PAD;
 			String mark = (is_current && ed.modified) ? " [+]" : "";
 			String text = string::tformat("%s%s%s", prefix, name, mark);
-			// Highlight choice: the file the editor is showing always takes
-			// the accent; the row under the pointer gets a faint tint, and
-			// only when it is not that file — a hover must never be mistaken
-			// for the selection, or the arrows look like they do nothing.
 			glaze::Style* s;
-			if (is_current) { s = &file_row_focused; }
+			if (files_active && is_current) { s = &file_row_focused; }
 			else if (i == ed.file_hover) { s = &file_row_hover; }
 			else { s = &file_row; }
 			ed.file_slots[i] = { .ed = ed, .index = i };
@@ -176,12 +217,72 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 
 	v.add(milktea::text(bg, "").height(milktea::cells(1)));
 
-	// The picker's tree_node() opens with its own "Files: <dir>" header, so
-	// the sidebar only adds its "Open" title. Adding a second "Files" header
-	// here would print the section label twice on top of each other.
-	v.add(ed.browser.tree_node().width(milktea::cells(SIDEBAR_WIDTH)));
+	// File-navigator header + rows. The picker's own tree_node() is not used:
+	// its title and the cursor's `> ` marker do not fit the sidebar's shared
+	// accent highlight, and the row click goes through ted's own BrowserSlot
+	// so it can apply the same focus logic as the open-files panel above.
+	sidebar_add_browser(ed, v, &bg, &file_row, &file_row_hover, &file_row_focused);
 
 	return v;
+}
+
+// sidebar_add_browser appends the "Files" header and one row per visible file
+// to the sidebar tree. Visible rows come from the picker's scroll/cursor
+// reconciliation, the same rules its own tree_node() follows. The cursor
+// row takes the same file_row_focused style as the active file above, so
+// the two panels read as a single highlighted list.
+fn void sidebar_add_browser(Editor* ed, xray::Node* v,
+		glaze::Style* bg, glaze::Style* file_row,
+		glaze::Style* file_row_hover, glaze::Style* file_row_focused) @local {
+	Theme* th = &ed.theme;
+	String header = string::tformat(" Files: %s", ed.browser.current_dir);
+	v.add(milktea::text(*bg, header).height(milktea::cells(1)));
+
+	// The picker's tree_node() reserves 4 rows for title + hint + padding;
+	// the sidebar's header here replaces the title, so visible rows are the
+	// height minus 1 (hint) minus padding rows when the directory is short.
+	int visible = ed.browser.height - 4;
+	if (visible < 1) visible = 1;
+	// Reconcile scroll with cursor: picker's own tree_node() does the same.
+	if (ed.browser.cursor < ed.browser.scroll) ed.browser.scroll = ed.browser.cursor;
+	if (ed.browser.cursor >= ed.browser.scroll + visible) {
+		ed.browser.scroll = ed.browser.cursor - visible + 1;
+	}
+	int end = ed.browser.scroll + visible;
+	if (end > ed.browser.count) end = ed.browser.count;
+
+	// Same rule as the open-files panel above: the accent highlight follows
+	// the sidebar's keyboard cursor, which lives in one panel at a time.
+	// When focus is on the files panel the browser row stays plain, and vice
+	// versa — two highlighted rows would read as two selections.
+	bool browser_active = ed.focus == FOCUS_SIDEBAR_BROWSER;
+	for (int i = ed.browser.scroll; i < end; i++) {
+		String name = (String)ed.browser.names[i][:ed.browser.name_lens[i]];
+		String suffix = ed.browser.is_dirs[i] ? "/" : "";
+		bool is_cursor = i == ed.browser.cursor;
+		bool is_hover = i == ed.browser_hover;
+		glaze::Style* s;
+		if (browser_active && is_cursor) { s = file_row_focused; }
+		else if (is_hover) { s = file_row_hover; }
+		else { s = file_row; }
+		String text = string::tformat("%s%s%s", SIDEBAR_PAD, name, suffix);
+		ed.browser_slots[i] = { .ed = ed, .index = i };
+		xray::Node* row = milktea::text(*s, text).height(milktea::cells(1));
+		row.id_with(&ed.browser_slots[i])
+			.on_click(&browser_row_index_clicked)
+			.on_hover_in(&browser_row_hover_in)
+			.on_hover_out(&browser_row_hover_out);
+		v.add(row);
+	}
+	// Pad with blank rows so the sidebar keeps its height when the directory
+	// is shorter than the slot — without this, the status bar would slide up.
+	int pad = visible - (end - ed.browser.scroll);
+	for (int i = 0; i < pad; i++) {
+		v.add(milktea::text(*bg, "").height(milktea::cells(1)));
+	}
+	glaze::Style hint_style = { .fg = th.dim };
+	v.add(milktea::text(hint_style, "Enter: open  Backspace: parent")
+		.height(milktea::cells(1)));
 }
 
 // sidebar_node is the panel the sidebar is drawn as in both backends. It is
@@ -200,6 +301,7 @@ fn xray::Node* sidebar_node(Editor* ed) {
 // so any handler registered here fires identically in either backend.
 fn void sidebar_init(Editor* ed) {
 	ed.file_hover = -1;
+	ed.browser_hover = -1;
 	ed.browser.on_row_click(&browser_row_clicked, ed);
 	ed.doc.on_press(&editor_pressed, ed);
 }
