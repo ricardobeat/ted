@@ -307,9 +307,6 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	if (msg.kind != milktea::MsgKind.KEY) return null;
 	milktea::KeyMsg k = msg.key;
 
-	// Ctrl+C always quits, even from any focus or dialog.
-	if (k.code == milktea::KeyCode.CTRL_C) return milktea::quit();
-
 	// Modal dialogs take precedence over the focus model.
 	if (self.shortcuts.open) return self.handle_shortcuts_key(k);
 	if (self.about.open) return self.handle_about_key(k);
@@ -342,7 +339,7 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 			return null;
 		}
 		// ESC in the editor moves into the focus ring rather than quitting;
-		// quit is Ctrl+C or Ctrl+Q from any focus.
+		// quit is Ctrl+Q from any focus.
 		self.focus = FOCUS_MENU_BAR;
 		return null;
 	}
@@ -387,8 +384,6 @@ fn milktea::Cmd Editor.handle_ctrl_key(&self, milktea::KeyMsg k) {
 				default:
 			}
 			return null;
-		case milktea::KeyCode.CTRL_C:
-			return milktea::quit();
 		default:
 	}
 	return null;
@@ -501,7 +496,7 @@ fn milktea::Cmd Editor.handle_shortcuts_key(&self, milktea::KeyMsg k) {
 }
 
 // quit leaves at once when there is nothing to lose, and otherwise asks
-// first. Ctrl+C stays an unconditional way out.
+// first.
 fn milktea::Cmd Editor.quit(&self) {
 	if (!self.modified) return milktea::quit();
 	self.quit_confirm.show();
@@ -581,7 +576,7 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		key_style.render("Tab"),
 		key_style.render("Ctrl+B"),
 		key_style.render("?"),
-		key_style.render("Ctrl+C"));
+		key_style.render("Ctrl+Q"));
 
 	String right_info = string::tformat("%s%s │ %s",
 		file_label, cursor_label, self.status_msg);
@@ -674,7 +669,7 @@ fn int main(String[] args) @feat(!MILKTEA_GUI) {
 fn int dump_render() {
 	DString out = dstring::temp();
 	Editor e = { };
-	milktea::Program p = milktea::@test_program_input(&e, &out, 100, 30, (char[]){ 0x03 });
+	milktea::Program p = milktea::@test_program_input(&e, &out, 100, 30, (char[]){ 0x11 });
 	p.run()!!;
 
 	String? focus_opt = std::os::env::tget_var("TED_FOCUS");
@@ -696,7 +691,7 @@ fn int dump_render() {
 	}
 
 	DString out2 = dstring::temp();
-	milktea::Program p2 = milktea::@test_program_input(&e, &out2, 100, 30, (char[]){ 0x03 });
+	milktea::Program p2 = milktea::@test_program_input(&e, &out2, 100, 30, (char[]){ 0x11 });
 	p2.run()!!;
 
 	String captured = out2.str_view();
