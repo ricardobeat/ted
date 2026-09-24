@@ -4,6 +4,7 @@ import milktea;
 import glaze;
 import xray;
 import boba;
+import ted::editor;
 import std::io;
 import std::io::file;
 import std::core::dstring;
@@ -17,8 +18,8 @@ const int STATUS_PAD = 2;
 // Focus model.
 //
 // EDITOR receives all printable keys plus cursor movement, backspace, and
-// the standard textarea shortcuts; TAB inserts indentation like any other
-// key and never leaves it. Only ESC leaves the editor, into MENU_BAR.
+// the editor's own shortcuts (see editor/commands.c3); TAB indents like any
+// other key and never leaves it. Only ESC leaves the editor, into MENU_BAR.
 //
 // MENU_BAR owns LEFT/RIGHT/ENTER/DOWN for the menu when no dropdown is open.
 // TAB moves to the sidebar; ESC returns to EDITOR.
@@ -50,10 +51,10 @@ struct Editor {
 	Dialog about;
 	Dialog quit_confirm;
 	boba::FilePicker browser;
-	boba::Textarea textarea;
+	editor::View doc;
 	Theme theme;
 
-	// Open files. The textarea always shows the active one; loading or
+	// Open files. The editor view always shows the active one; loading or
 	// creating a new file pushes onto this list. For now we only support a
 	// single buffer, but the data structure is here for future expansion.
 	OpenFile[MAX_OPEN_FILES] open_files;
@@ -115,7 +116,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	self.browser.load_dir(".");
 	self.focus = FOCUS_EDITOR;
 	self.modified = false;
-	self.textarea = boba::new_textarea(80, 24);
+	self.doc.init();
 	self.status_msg = "Ready";
 	self.win_w = 80;
 	self.win_h = 24;
@@ -199,9 +200,7 @@ fn void Editor.load_file(&self, String path) {
 		return;
 	}
 
-	self.textarea.clear();
-	String content = (String)data;
-	self.textarea.handle_paste(content);
+	self.doc.set_text((String)data);
 	self.current_file = path;
 	self.modified = false;
 
@@ -218,7 +217,7 @@ fn void Editor.open_path(&self, String path) {
 		self.load_file(path);
 		return;
 	}
-	self.textarea.clear();
+	self.doc.set_text("");
 	self.current_file = path;
 	self.modified = false;
 	int idx = self.open_file_add(path);
@@ -231,7 +230,7 @@ fn void Editor.save_file(&self) {
 		self.status_msg = "No file to save";
 		return;
 	}
-	String content = self.textarea.text();
+	String content = self.doc.text();
 	if (catch err = io::file::save(self.current_file, content)) {
 		self.status_msg = string::tformat("Error: could not save %s", self.current_file);
 		return;
@@ -241,7 +240,7 @@ fn void Editor.save_file(&self) {
 }
 
 fn void Editor.new_file(&self) {
-	self.textarea.clear();
+	self.doc.set_text("");
 	self.current_file = "";
 	self.modified = false;
 	self.status_msg = "New file";
@@ -258,7 +257,7 @@ fn void Editor.activate_file(&self, int idx) {
 	String path = (String)f.path_buf[:f.path_len];
 	self.active_file = idx;
 	self.current_file = path;
-	self.textarea.clear();
+	self.doc.set_text("");
 	self.modified = false;
 	// A file named on the command line but never saved has nothing on disk.
 	if (!file::exists(path)) return;
@@ -267,8 +266,7 @@ fn void Editor.activate_file(&self, int idx) {
 		self.status_msg = string::tformat("Error: could not read %s", path);
 		return;
 	}
-	String content = (String)data;
-	self.textarea.handle_paste(content);
+	self.doc.set_text((String)data);
 	self.modified = false;
 }
 
@@ -326,7 +324,7 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	// Global Ctrl shortcuts work in any focus.
 	if (k.ctrl) return self.handle_ctrl_key(k);
 
-	// From the editor, TAB is indentation like any other key: the textarea
+	// From the editor, TAB is indentation like any other key: the editor
 	// handles it and focus does not move. Only ESC leaves the editor, into
 	// the menu bar; once outside, TAB goes between the menu and the sidebar
 	// and ESC returns to the editor.
@@ -383,9 +381,13 @@ fn milktea::Cmd Editor.handle_ctrl_key(&self, milktea::KeyMsg k) {
 				case '-': self.set_zoom(-1);
 				case '0': self.set_zoom(0);
 				default:
+					if (self.focus == FOCUS_EDITOR) return self.handle_editor_key(k);
 			}
 			return null;
 		default:
+			// Ctrl with a navigation key moves by words or to the ends of the
+			// document; those are the editor's.
+			if (self.focus == FOCUS_EDITOR) return self.handle_editor_key(k);
 	}
 	return null;
 }
@@ -406,8 +408,9 @@ fn milktea::Cmd Editor.handle_menu_bar_key(&self, milktea::KeyMsg k) {
 }
 
 fn milktea::Cmd Editor.handle_editor_key(&self, milktea::KeyMsg k) {
-	self.textarea.handle_key(k);
-	self.modified = true;
+	int before = self.doc.buf.version;
+	self.doc.handle_key(k);
+	if (self.doc.buf.version != before) self.modified = true;
 	return null;
 }
 
@@ -572,8 +575,10 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	} else {
 		file_label = "  [new]";
 	}
-	String cursor_label = string::tformat("  Ln %d, Col %d  ",
-		self.textarea.cursor_row + 1, self.textarea.cursor_col + 1);
+	int caret_line;
+	int caret_col;
+	self.doc.caret_line_col(&caret_line, &caret_col);
+	String cursor_label = string::tformat("  Ln %d, Col %d  ", caret_line + 1, caret_col + 1);
 
 	String mode_hint;
 	switch (self.focus) {
@@ -598,25 +603,16 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	int editor_h = self.win_h - BAR_ROWS - STATUS_ROWS;
 	if (editor_h < 1) editor_h = 1;
 
-	self.textarea.width = self.win_w - SIDEBAR_WIDTH - 2;
-	self.textarea.height = editor_h - 2;
-	self.textarea.focused = self.focus == FOCUS_EDITOR;
-
-	// The textarea paints its own cells over the padded area behind it, so
-	// every style it renders with has to carry the editor background. A style
-	// that only sets a foreground leaves those cells on the terminal's default
-	// background, which shows through as a rectangle of the wrong colour.
-	self.textarea.focused_style = glaze::style()
-		.foreground(th.editor_fg).background(th.editor_bg);
-	self.textarea.blurred_style = glaze::style()
-		.foreground(th.dim).background(th.editor_bg);
-	self.textarea.line_number_style = glaze::style()
-		.foreground(th.line_num).background(th.editor_bg);
-	self.textarea.placeholder_style = glaze::style()
-		.foreground(th.dim).background(th.editor_bg);
-	self.textarea.cursor_style = glaze::style()
-		.foreground(th.ink).background(th.cursor);
-	self.syntax.highlight(&self.textarea, self.current_file);
+	// Every style the view draws with carries the editor background, so the
+	// text area is one even colour out to its edges.
+	self.doc.focused = self.focus == FOCUS_EDITOR;
+	self.doc.text_style = glaze::style()
+		.foreground(self.doc.focused ? th.editor_fg : th.dim).background(th.editor_bg);
+	self.doc.gutter_style = glaze::style().foreground(th.line_num).background(th.editor_bg);
+	self.doc.gutter_current_style = glaze::style().foreground(th.dim).background(th.editor_bg);
+	self.doc.selection_style = glaze::style().background(th.selection);
+	self.doc.caret_style = glaze::style().foreground(th.ink).background(th.cursor);
+	self.syntax.highlight(&self.doc, self.current_file);
 
 	self.browser.width = SIDEBAR_WIDTH;
 	self.browser.height = editor_h;
@@ -624,12 +620,12 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	xray::Node* editor_row = milktea::hstack().fill(1);
 	editor_row.add(sidebar_node(self));
 
-	// Editor area with 1-cell padding on every side, so the textarea and
+	// Editor area with 1-cell padding on every side, so the text and
 	// line-number gutter sit inside a margin rather than flush against the
 	// sidebar and the status bar.
 	editor_row.add(milktea::vbox(glaze::style().background(th.editor_bg).pad(1))
 		.fill(1)
-		.add(self.textarea.node().fill(1)));
+		.add(self.doc.node().fill(1)));
 
 	xray::Node* status_row = milktea::hstack()
 		.height(milktea::cells(1))

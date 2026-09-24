@@ -1,6 +1,6 @@
 module ted;
 
-import boba;
+import ted::editor;
 import glaze;
 import ink::token;
 import ink::style;
@@ -9,12 +9,11 @@ import ink::themes;
 import ink::lexer;
 import ink::grammars;
 import std::os::env;
-import std::collections::list;
 
 // Syntax highlighting, by ink: a tree-sitter grammar parses the buffer, the
 // grammar's highlight query names the parts, and a theme colors them. The
-// result goes to the textarea as highlight spans, which it draws over the
-// editor's own style.
+// result is the editor view's "syntax" decoration layer, which it draws
+// under any other.
 //
 // ink picks the language from the file name and loads its grammar and query
 // from vendor/ink.c3l the first time a file needs them. A file no grammar
@@ -31,10 +30,8 @@ struct Syntax {
 	lexer::Lexer* lexer;
 	char[MAX_PATH] path_buf;
 	sz path_len;
-	// The text the spans were made from, to tell when they're stale.
-	char[4096] text_buf;
-	sz text_len;
-	list::List{boba::HighlightSpan} spans;
+	// The buffer version the layer was made from, to tell when it is stale.
+	int version;
 }
 
 // ink_roots are where ink.c3l may be: under the working directory (running
@@ -55,15 +52,12 @@ fn String[] ink_roots() @local {
 
 fn void Syntax.load(&self) {
 	self.loaded = true;
-	// The spans are rebuilt inside a temp pool; set the heap allocator up
-	// front, or the list would take the pool's and lose its storage with it.
-	self.spans.init(mem);
 	themes::register_all_themes();
 	self.theme = style::styles_get(SYNTAX_THEME);
 }
 
-// span_style turns a theme entry into what the textarea draws a span with.
-// Only the foreground and the attributes: the editor keeps its background.
+// span_style turns a theme entry into what the view draws a span with. Only
+// the foreground and the attributes: the editor keeps its background.
 fn glaze::Style span_style(style::StyleEntry e) @local {
 	glaze::Style s = { .bold = e.bold, .italic = e.italic, .underline = e.underline };
 	if (colour::colour_is_set(e.fg)) {
@@ -77,13 +71,14 @@ fn glaze::Style span_style(style::StyleEntry e) @local {
 	return s;
 }
 
-// highlight brings the textarea's spans up to date with its text and the
+// highlight brings the view's syntax layer up to date with its text and the
 // file it holds. It re-parses only when one of them has changed since last
 // time, so calling it every frame costs a comparison.
-fn void Syntax.highlight(&self, boba::Textarea* ta, String path) {
+fn void Syntax.highlight(&self, editor::View* view, String path) {
 	if (!self.loaded) self.load();
+	editor::Layer* layer = view.layer("syntax", -1);
 
-	bool stale = false;
+	bool stale = view.buf.version != self.version;
 	if (path != (String)self.path_buf[:self.path_len]) {
 		sz n = path.len < MAX_PATH ? path.len : MAX_PATH;
 		self.path_buf[:n] = path[:n];
@@ -94,29 +89,20 @@ fn void Syntax.highlight(&self, boba::Textarea* ta, String path) {
 		}
 		stale = true;
 	}
-	if (self.lexer == null) {
-		ta.highlights = {};
-		return;
-	}
+	if (!stale) return;
+	self.version = view.buf.version;
+	layer.clear();
+	if (self.lexer == null) return;
 
-	String text = ta.text();
-	if (stale || text != (String)self.text_buf[:self.text_len]) {
-		self.text_buf[:text.len] = text[..];
-		self.text_len = text.len;
-		self.spans.clear();
-		@pool() {
-			if (try it = self.lexer.tokenise(text)) {
-				sz at = 0;
-				while (try tok = token::token_iterator_next(it)) {
-					style::StyleEntry e = style::style_get(self.theme, tok.type);
-					bool styled = colour::colour_is_set(e.fg) || e.bold || e.italic || e.underline;
-					if (styled && tok.value.len > 0) {
-						self.spans.push({ .start = at, .len = tok.value.len, .style = span_style(e) });
-					}
-					at += tok.value.len;
-				}
+	@pool() {
+		if (try it = self.lexer.tokenise(view.text())) {
+			sz at = 0;
+			while (try tok = token::token_iterator_next(it)) {
+				style::StyleEntry e = style::style_get(self.theme, tok.type);
+				bool styled = colour::colour_is_set(e.fg) || e.bold || e.italic || e.underline;
+				if (styled) layer.style(at, at + tok.value.len, span_style(e));
+				at += tok.value.len;
 			}
-		};
-	}
-	ta.highlights = self.spans.array_view();
+		}
+	};
 }

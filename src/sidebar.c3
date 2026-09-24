@@ -90,16 +90,13 @@ fn void browser_row_clicked(void* id, String name, bool is_dir, int col, int row
 
 // ── Textarea press handler ──────────────────────────────────────────────────
 //
-// A click inside the editor body focuses the editor first and then puts the
-// caret where the click landed. The two are one action from the user's side —
-// clicking the text is how you start editing at that spot — and the caret
-// position arrives already resolved to text coordinates, so there is no
-// layout math here to get wrong.
+// A click inside the editor body puts the caret where it landed — the view
+// does that itself — and focuses the editor, so the click is one action from
+// the user's side: clicking the text is how you start editing at that spot.
 
-fn void editor_pressed(void* id, int row, int col) @feat(MILKTEA_GUI) @local {
+fn void editor_pressed(void* id) @feat(MILKTEA_GUI) @local {
 	Editor* ed = (Editor*)id;
 	ed.focus_editor();
-	ed.textarea.set_cursor(row, col);
 }
 
 // ── Terminal render ─────────────────────────────────────────────────────────
@@ -220,8 +217,7 @@ fn String render_sidebar(Editor* ed) {
 // sidebar_tree() builds the sidebar as a clickable node tree. Each open-file
 // row is its own node with on_click + on_hover_in/out; the browser is the
 // picker's own tree_node() (which exposes per-row clicks the same way). The
-// textarea's on_press hooks the editor body so a click there moves the
-// caret. Focus is not consulted anywhere — clicks work from any state.
+// editor view's on_press hooks the editor body so a click there focuses it. Focus is not consulted anywhere — clicks work from any state.
 //
 // Hover is a faint tint and nothing more: the accent row belongs to the file
 // the editor is showing. The two reading the same was worse than no hover at
@@ -320,7 +316,7 @@ fn xray::Node* sidebar_node(Editor* ed) {
 fn void sidebar_init(Editor* ed) @feat(MILKTEA_GUI) {
 	ed.file_hover = -1;
 	ed.browser.on_row_click(&browser_row_clicked, ed);
-	ed.textarea.on_press(&editor_pressed, ed);
+	ed.doc.on_press(&editor_pressed, ed);
 }
 
 // section_header renders a section label followed by a dim rule that fills
