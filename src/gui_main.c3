@@ -2,6 +2,7 @@ module ted;
 
 import milktea;
 import milktea_gui;
+import ted::editor;
 import std::core::string;
 import std::io::file;
 import std::io::path;
@@ -190,6 +191,9 @@ fn int main(String[] args) {
 	g_font_size = cell_step_for(g_text_pt);
 	int cell_w = cell_w_for(g_font_size.pt);
 	e.chrome_cells = chrome_on_left() ? CHROME_CELLS : 0;
+	// The window has no terminal cursor to place, so the caret is painted into
+	// the grid instead of left to the host (see draw_caret).
+	e.doc.caret.draw = &editor::draw_caret;
 	use_app_font();
 	String? shot = env::tget_var("TED_SHOT");
 	milktea_gui::run((milktea::Model)&e, {
