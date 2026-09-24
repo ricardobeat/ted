@@ -61,6 +61,14 @@ struct Editor {
 	int open_file_count;
 	int active_file;
 
+	// Per-row click slot for the open-files panel of the sidebar. Each row's
+	// id_with(&file_slots[i]) carries this address through the node tree to
+	// the click handler. -1 in file_hover = no row hovered. The address stays
+	// stable across frames even though the node tree is rebuilt each call to
+	// view().
+	FileSlot[MAX_OPEN_FILES] file_slots;
+	int file_hover;
+
 	// Cells reserved at the left of the top bar for window buttons drawn by
 	// the platform (see gui_main.c3); zero in the terminal.
 	int chrome_cells;
@@ -119,11 +127,11 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	self.win_h = 24;
 	self.open_file_count = 0;
 	self.active_file = -1;
-	// GUI: register the press handler the editor's node carries. The
-	// terminal build is keyboard-driven and never sees it.
-	$if $feat(MILKTEA_GUI):
-		sidebar_init(self);
-	$endif
+	// Register the click handlers every interactive node carries. Milktea
+	// parses mouse events in both the terminal and the GUI and dispatches
+	// them through the same framework, so the same handlers fire in either
+	// build without a feature gate.
+	sidebar_init(self);
 
 	// Layout-debug hooks for the snapshot harness (`./out/ted --render`).
 	String? focus_opt = std::os::env::tget_var("TED_FOCUS");
