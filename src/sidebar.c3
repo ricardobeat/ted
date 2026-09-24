@@ -10,7 +10,7 @@ import std::core::dstring;
 
 const int SIDEBAR_WIDTH_MAX = 38; // widest the sidebar's content gets; the
                                   // border adds two more on top of this
-const int SIDEBAR_WIDTH_MIN = 16; // narrowest the sidebar ever shrinks to
+const int SIDEBAR_WIDTH_MIN = 30; // narrowest the sidebar ever shrinks to
 const int SIDEBAR_BORDER = 2; // one cell on each side for the panel border
 // Cells between the panel's border and the text in it. One is enough to keep
 // the names off the rule; the cursor marker takes this cell on the row it is
