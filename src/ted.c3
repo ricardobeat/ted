@@ -74,6 +74,7 @@ struct Editor {
 	// name and the file appears on the first save.
 	String open_arg;
 	String current_file;
+	Syntax syntax;
 	String status_msg;
 	bool modified;
 	int win_w;
@@ -615,6 +616,7 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		.foreground(th.dim).background(th.editor_bg);
 	self.textarea.cursor_style = glaze::style()
 		.foreground(th.ink).background(th.cursor);
+	self.syntax.highlight(&self.textarea, self.current_file);
 
 	self.browser.width = SIDEBAR_WIDTH;
 	self.browser.height = editor_h;

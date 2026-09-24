@@ -13,6 +13,7 @@
         "src/dialog.c3",
         "src/menu.c3",
         "src/sidebar.c3",
+        "src/syntax.c3",
         "src/ted.c3"
       ],
       "opt": "Os",
@@ -26,6 +27,7 @@
         "src/dialog.c3",
         "src/menu.c3",
         "src/sidebar.c3",
+        "src/syntax.c3",
         "src/ted.c3",
         "src/chrome.c3",
         "src/gui_main.c3",
@@ -45,10 +47,12 @@
     }
   },
   "dependency-search-paths": [
+    "vendor",
     "vendor/milktea",
     "vendor/milktea/lib"
   ],
   "dependencies": [
+    "ink",
     "milktea",
     "glaze",
     "xray",
