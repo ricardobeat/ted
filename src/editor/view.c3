@@ -22,6 +22,11 @@ struct View (xray::Content) {
 	List{Selection} sels;
 	List{Layer} layers;
 	History history;
+	// Language knowledge, when there is some: see Assist.
+	Assist assist;
+	// Brackets and quotes that pair up as they are typed, openers and
+	// closers alternating.
+	List{String} pairs;
 
 	// Scroll position: the first line on screen, and how many of its wrapped
 	// rows are above the top.
@@ -83,6 +88,8 @@ fn void View.init(&self) {
 	self.sels.push(caret(0));
 	self.layers.init(mem);
 	self.history.init();
+	self.pairs.init(mem);
+	self.set_pairs(&DEFAULT_PAIRS);
 	self.text_width = 80;
 	self.height = 24;
 	self.wrap = true;
@@ -97,6 +104,7 @@ fn void View.free(&self) {
 	foreach (&l : self.layers) l.free();
 	self.layers.free();
 	self.history.free();
+	self.pairs.free();
 }
 
 // set_text replaces the whole document, as opening a file does: the caret

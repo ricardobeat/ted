@@ -8,6 +8,8 @@ import ink::colour;
 import ink::themes;
 import ink::lexer;
 import ink::grammars;
+import ink::helix;
+import ink::tree;
 import std::os::env;
 
 // Syntax highlighting, by ink: a tree-sitter grammar parses the buffer, the
@@ -23,7 +25,7 @@ import std::os::env;
 const String SYNTAX_THEME = "monokai";
 const int MAX_PATH = 256;
 
-struct Syntax {
+struct Syntax (editor::Assist) {
 	bool loaded;
 	style::Style* theme;
 	// The lexer for the file in path, or null to show it plain.
@@ -32,6 +34,14 @@ struct Syntax {
 	sz path_len;
 	// The buffer version the layer was made from, to tell when it is stale.
 	int version;
+	// The file's language in Helix's registry, for its auto-pairs.
+	helix::Language* language;
+	// The view being highlighted, and its syntax tree, parsed when asked
+	// for and kept until the text changes.
+	editor::View* view;
+	tree::Tree tree;
+	int tree_version;
+	bool has_tree;
 }
 
 // ink_roots are where ink.c3l may be: under the working directory (running
@@ -48,6 +58,13 @@ fn String[] ink_roots() @local {
 	roots[1] = string::tformat("%s/../vendor/ink.c3l", dir);
 	roots[2] = string::tformat("%s/vendor/ink.c3l", dir);
 	return roots;
+}
+
+// reset forgets the file, the tree and what they were made from, for a view
+// that is starting over.
+fn void Syntax.reset(&self) {
+	self.drop_tree();
+	*self = {};
 }
 
 fn void Syntax.load(&self) {
@@ -76,6 +93,7 @@ fn glaze::Style span_style(style::StyleEntry e) @local {
 // time, so calling it every frame costs a comparison.
 fn void Syntax.highlight(&self, editor::View* view, String path) {
 	if (!self.loaded) self.load();
+	self.view = view;
 	editor::Layer* layer = view.layer("syntax", -1);
 
 	bool stale = view.buf.version != self.version;
@@ -84,8 +102,20 @@ fn void Syntax.highlight(&self, editor::View* view, String path) {
 		self.path_buf[:n] = path[:n];
 		self.path_len = n;
 		self.lexer = null;
+		self.language = null;
+		self.drop_tree();
 		if (path.len > 0 && self.theme != null) {
 			if (try l = grammars::lexer_for_file(path, ink_roots())) self.lexer = l;
+			if (try hl = helix::language_for_file(path)) self.language = hl;
+		}
+		// The language's own pairs, if it lists them; none if it turns
+		// pairing off; the editor's defaults otherwise.
+		if (self.language && self.language.no_auto_pairs) {
+			view.set_pairs({});
+		} else if (self.language && self.language.auto_pairs.len() > 0) {
+			view.set_pairs(self.language.auto_pairs.array_view());
+		} else {
+			view.set_pairs(&editor::DEFAULT_PAIRS);
 		}
 		stale = true;
 	}
@@ -105,4 +135,58 @@ fn void Syntax.highlight(&self, editor::View* view, String path) {
 			}
 		}
 	};
+}
+
+// ── what the editor asks of the language (editor::Assist) ────────────────
+
+fn tree::Tree*? Syntax.parsed(&self) {
+	if (self.lexer == null || self.view == null) return tree::NO_GRAMMAR~;
+	if (self.has_tree && self.tree_version == self.view.buf.version) return &self.tree;
+	self.drop_tree();
+	self.tree = tree::parse(self.lexer, self.view.text())!;
+	self.has_tree = true;
+	self.tree_version = self.view.buf.version;
+	return &self.tree;
+}
+
+fn void Syntax.drop_tree(&self) {
+	if (self.has_tree) self.tree.free();
+	self.has_tree = false;
+}
+
+// context_at says whether pos is inside a string or a comment, by the kind
+// of the nodes around it. A string's end is outside it — just past the
+// closing quote is code again — but a line comment runs to the end of the
+// line, so its end and anything after it on the line are still in it; only
+// a comment closed with */ ends where its node does.
+fn editor::Context Syntax.context_at(&self, sz pos) @dynamic {
+	tree::Tree*? t = self.parsed();
+	if (catch t) return CODE;
+	// A line comment runs to the end of its line, past where its node stops
+	// (grammars leave trailing spaces out): if the last thing before pos on
+	// the line is in one, so is pos.
+	String text = self.view.text();
+	sz q = pos;
+	while (q > 0 && (text[q - 1] == ' ' || text[q - 1] == '\t')) q--;
+	if (q > 0 && q < pos && text[q - 1] != '\n') {
+		for (tree::Node n = t.node_at(q - 1, q - 1); !n.is_null(); n = n.parent()) {
+			if (n.kind().contains("comment") && !n.text().ends_with("*/")) return COMMENT;
+		}
+	}
+	for (tree::Node n = t.node_at(pos, pos); !n.is_null(); n = n.parent()) {
+		if (pos <= n.start() || pos > n.end()) continue;
+		String k = n.kind();
+		if (k.contains("comment")) {
+			if (pos < n.end() || !n.text().ends_with("*/")) return COMMENT;
+			continue;
+		}
+		if (pos == n.end()) continue;
+		if (k.contains("string") || k.contains("char_literal")) return STRING;
+	}
+	return CODE;
+}
+
+fn String? Syntax.tag_to_close(&self, sz pos) @dynamic {
+	tree::Tree* t = self.parsed()!;
+	return t.tag_to_close(pos);
 }

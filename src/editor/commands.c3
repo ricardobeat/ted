@@ -77,10 +77,18 @@ fn void View.delete_back(&self, bool word = false) {
 		foreach (i : self.order_desc()) {
 			Selection s = self.sels[i];
 			sz start = s.start();
+			sz end = s.end();
 			if (s.is_empty()) {
-				start = word ? self.word_start(s.head) : self.indent_or_char_before(s.head);
+				sz pair = word ? 0 : self.pair_around(s.head);
+				if (pair > 0) {
+					// Between an empty pair: both halves go.
+					start = s.head - pair;
+					end = next_char(self.buf.str(), s.head);
+				} else {
+					start = word ? self.word_start(s.head) : self.indent_or_char_before(s.head);
+				}
 			}
-			self.apply(step, start, s.end(), "");
+			self.apply(step, start, end, "");
 			self.sels[i] = caret(start);
 		}
 		self.after_edit(step);
@@ -333,7 +341,7 @@ fn void View.merge_selections(&self) {
 	}
 }
 
-fn bool is_word(char c) @local => c == '_' || c.is_alnum() || c >= 0x80;
+fn bool is_word(char c) => c == '_' || c.is_alnum() || c >= 0x80;
 
 fn sz View.word_start(&self, sz pos) {
 	String t = self.buf.str();
@@ -357,14 +365,14 @@ fn sz View.word_end(&self, sz pos) {
 	return pos;
 }
 
-fn sz prev_char(String t, sz pos) @local {
+fn sz prev_char(String t, sz pos) {
 	if (pos == 0) return 0;
 	pos--;
 	while (pos > 0 && (t[pos] & 0xC0) == 0x80) pos--;
 	return pos;
 }
 
-fn sz next_char(String t, sz pos) @local {
+fn sz next_char(String t, sz pos) {
 	if (pos >= t.len) return t.len;
 	pos++;
 	while (pos < t.len && (t[pos] & 0xC0) == 0x80) pos++;
@@ -402,7 +410,7 @@ fn bool View.handle_key(&self, milktea::KeyMsg k) {
 			if (k.alt) return false;
 			DString s = dstring::temp();
 			s.append_char32(k.rune);
-			self.insert_text(s.str_view(), TYPING);
+			self.type_text(s.str_view());
 		default:
 			return false;
 	}

@@ -116,7 +116,9 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	self.browser.load_dir(".");
 	self.focus = FOCUS_EDITOR;
 	self.modified = false;
+	self.syntax.reset();
 	self.doc.init();
+	self.doc.assist = &self.syntax;
 	self.status_msg = "Ready";
 	self.win_w = 80;
 	self.win_h = 24;
@@ -408,6 +410,9 @@ fn milktea::Cmd Editor.handle_menu_bar_key(&self, milktea::KeyMsg k) {
 }
 
 fn milktea::Cmd Editor.handle_editor_key(&self, milktea::KeyMsg k) {
+	// What a key does can depend on the language (pairs, strings, tags), so
+	// the view's idea of it must be current even before the first frame.
+	self.syntax.highlight(&self.doc, self.current_file);
 	int before = self.doc.buf.version;
 	self.doc.handle_key(k);
 	if (self.doc.buf.version != before) self.modified = true;
