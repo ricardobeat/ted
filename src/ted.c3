@@ -677,6 +677,10 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		.height(milktea::cells(STATUS_ROWS))
 		.add(status_row);
 
+	statusbar.decorate(xray::linear(
+		milktea::to_cell_color(th.status_bg),
+		milktea::to_cell_color(th.bar), 90.0f));
+
 	int sidebar_w = sidebar_panel_width(self);
 	xray::Rect editor_area = {
 		.x = sidebar_w,

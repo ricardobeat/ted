@@ -36,8 +36,23 @@
         "vendor/milktea/milktea-gui/**"
       ],
       "c-sources": [
-        "vendor/milktea/milktea-gui/macos_window.c"
+        "vendor/milktea/milktea-gui/macos_window.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-blend.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-canvas.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-font.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-ft-math.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-ft-raster.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-ft-stroker.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-matrix.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-paint.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-path.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-rasterize.c",
+        "vendor/milktea/vendor/plutovg/src/plutovg-surface.c"
       ],
+      "c-include-dirs": [
+        "vendor/milktea/vendor/plutovg/include"
+      ],
+      "cflags": "-DPLUTOVG_DISABLE_IMAGE_WRITE",
       "features": [
         "MILKTEA_GUI"
       ],
