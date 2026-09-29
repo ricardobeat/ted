@@ -207,6 +207,21 @@ fn int Editor.open_file_add(&self, String path) {
 	return self.open_file_count++;
 }
 
+// track_file adds `path` to the open-files list and makes it current.
+// current_file points at the list's own copy, never at `path` itself: callers
+// such as the sidebar pass temp-allocated strings that are freed once the
+// frame ends.
+fn void Editor.track_file(&self, String path) {
+	int idx = self.open_file_add(path);
+	if (idx < 0) {
+		self.current_file = path.copy(mem);
+		return;
+	}
+	self.active_file = idx;
+	OpenFile* f = &self.open_files[idx];
+	self.current_file = (String)f.path_buf[:f.path_len];
+}
+
 fn void Editor.load_file(&self, String path) {
 	char[]? data = file::load_temp(path);
 	if (catch err = data) {
@@ -215,11 +230,8 @@ fn void Editor.load_file(&self, String path) {
 	}
 
 	self.doc.set_text((String)data);
-	self.current_file = path;
 	self.modified = false;
-
-	int idx = self.open_file_add(path);
-	if (idx >= 0) self.active_file = idx;
+	self.track_file(path);
 	self.status_msg = string::tformat("Opened: %s", path);
 }
 
@@ -232,10 +244,8 @@ fn void Editor.open_path(&self, String path) {
 		return;
 	}
 	self.doc.set_text("");
-	self.current_file = path;
 	self.modified = false;
-	int idx = self.open_file_add(path);
-	if (idx >= 0) self.active_file = idx;
+	self.track_file(path);
 	self.status_msg = string::tformat("New file: %s", path);
 }
 
