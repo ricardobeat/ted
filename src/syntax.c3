@@ -46,10 +46,16 @@ struct Syntax (editor::Assist) {
 }
 
 // ink_roots are where ink.c3l may be: under the working directory (running
-// from the repo) or beside the executable (out/ted).
+// from the repo) or beside the executable (out/ted), wherever a symlink to it lives.
+extern fn ZString realpath(ZString path, char* resolved);
+
 fn String[] ink_roots() @local {
 	String dir = "";
 	if (try exe = env::executable_path()) {
+		// Follow a symlink (/usr/local/bin/ted -> out/ted) to the real binary.
+		char[1024] resolved;
+		ZString real = realpath(exe.zstr_tcopy(), &resolved);
+		if (real) exe = real.str_view();
 		for (sz i = exe.len; i > 0; i--) {
 			if (exe[i - 1] == '/') { dir = exe[:i - 1]; break; }
 		}
