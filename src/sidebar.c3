@@ -3,6 +3,7 @@ module ted;
 import milktea;
 import glaze;
 import xray;
+import dye;
 import boba;
 import std::io;
 import std::core::string;
@@ -203,23 +204,21 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 		.fg = th.ink, .bg = th.accent, .bold = true,
 	};
 
-	glaze::Style panel_style = {
+	glaze::Style panel = panel_style({
 		.bg = th.browser_bg, .fg = th.browser_fg,
 		.border = glaze::NORMAL, .border_color = th.border,
 		.border_bg = th.browser_bg,
-	};
-	xray::Node* v = milktea::vbox(panel_style)
+	});
+	xray::Node* v = sidebar_panel(milktea::vbox(panel), th)
 		.width(milktea::cells(content_w + SIDEBAR_BORDER));
 
 	// "Open" header
-	v.add(milktea::text(bg, section_header(th, "Open", content_w))
-		.height(milktea::cells(1)));
+	v.add(sidebar_text(bg, section_header(th, "Open", content_w)));
 
 	// Open-file rows.
 	if (ed.open_file_count == 0) {
 		glaze::Style empty_row = { .fg = th.dim, .bg = th.browser_bg };
-		v.add(milktea::text(empty_row, string::tformat("%s(none)", SIDEBAR_PAD))
-			.height(milktea::cells(1)));
+		v.add(sidebar_text(empty_row, string::tformat("%s(none)", SIDEBAR_PAD)));
 	} else {
 		// The ▸ marker on the active file is always shown — the user needs to
 		// see which file is in the editor from anywhere. The accent highlight,
@@ -241,7 +240,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 			else if (i == ed.file_hover) { s = &file_row_hover; }
 			else { s = &file_row; }
 			ed.file_slots[i] = { .ed = ed, .index = i };
-			xray::Node* row = milktea::text(*s, text).height(milktea::cells(1));
+			xray::Node* row = sidebar_text(*s, text, s != &file_row);
 			row.id_with(&ed.file_slots[i])
 				.on_click(&file_row_clicked)
 				.on_hover_in(&file_row_hover_in)
@@ -250,7 +249,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 		}
 	}
 
-	v.add(milktea::text(bg, "").height(milktea::cells(1)));
+	v.add(sidebar_text(bg, ""));
 
 	// File-navigator header + rows. The picker's own tree_node() is not used:
 	// its title and the cursor's `> ` marker do not fit the sidebar's shared
@@ -271,7 +270,7 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 		glaze::Style* file_row_hover, glaze::Style* file_row_focused) @local {
 	Theme* th = &ed.theme;
 	String header = string::tformat(" Files: %s", ed.browser.current_dir);
-	v.add(milktea::text(*bg, header).height(milktea::cells(1)));
+	v.add(sidebar_text(*bg, header));
 
 	// The picker's tree_node() reserves 4 rows for title + hint + padding;
 	// the sidebar's header here replaces the title, so visible rows are the
@@ -302,7 +301,7 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 		else { s = file_row; }
 		String text = string::tformat("%s%s%s", SIDEBAR_PAD, name, suffix);
 		ed.browser_slots[i] = { .ed = ed, .index = i };
-		xray::Node* row = milktea::text(*s, text).height(milktea::cells(1));
+		xray::Node* row = sidebar_text(*s, text, s != file_row);
 		row.id_with(&ed.browser_slots[i])
 			.on_click(&browser_row_index_clicked)
 			.on_hover_in(&browser_row_hover_in)
@@ -313,11 +312,33 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 	// is shorter than the slot — without this, the status bar would slide up.
 	sz pad = visible - (end - ed.browser.scroll);
 	for (sz i = 0; i < pad; i++) {
-		v.add(milktea::text(*bg, "").height(milktea::cells(1)));
+		v.add(sidebar_text(*bg, ""));
 	}
 	glaze::Style hint_style = { .fg = th.dim, .bg = th.browser_bg };
-	v.add(milktea::text(hint_style, "Enter: open  Backspace: parent")
-		.height(milktea::cells(1)));
+	v.add(sidebar_text(hint_style, "Enter: open  Backspace: parent"));
+}
+
+// sidebar_text is one row of the sidebar. In a terminal it is the styled
+// text, background and all. In the GUI the panel's gradient shows through a
+// plain row, and a lit one (hovered or selected) is a rounded highlight.
+fn xray::Node* sidebar_text(glaze::Style s, String text, bool lit = false) @local {
+	xray::Node* n = milktea::text(highlight_style(s), text).height(milktea::cells(1));
+	if (!pixel_ui()) return n;
+	return lit ? highlight(n, s.bg) : clear_bg(n);
+}
+
+// sidebar_panel gives the GUI sidebar a source list's look: a very subtle
+// vertical gradient instead of a flat fill, and a hairline at its right
+// edge where the terminal draws a box. The hairline is an inner shadow
+// offset one point left with no blur, which leaves exactly a one-point
+// line along the right edge.
+fn xray::Node* sidebar_panel(xray::Node* n, Theme* th) @local {
+	if (!pixel_ui()) return n;
+	glaze::Color top = dye::color_rgba(255, 255, 255, 7).blend_over(th.browser_bg);
+	glaze::Color bottom = dye::color_rgba(0, 0, 0, 12).blend_over(th.browser_bg);
+	return n.decorate(xray::linear(top, bottom, 90.0f)
+		.with_inner_shadow(-1.0f, 0.0f, 0.0f, th.border)
+		.padding(PANEL_PAD_Y, 0, PANEL_PAD_Y, 0));
 }
 
 // sidebar_node is the panel the sidebar is drawn as in both backends. It is
