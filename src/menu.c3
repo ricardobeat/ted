@@ -145,6 +145,22 @@ fn void item_clicked(void* id, String id_str, sz col, sz row) @local {
 	slot.menu.pending = Chosen.PICKED;
 }
 
+// While a menu is open the pointer drives it the way it does a platform menu:
+// the item under it is the highlighted one, and moving onto another title
+// opens that menu instead.
+fn void item_hovered(void* id, String id_str, sz col, sz row) @local {
+	ItemSlot* slot = (ItemSlot*)id;
+	slot.menu.item = slot.index;
+}
+
+fn void title_hovered(void* id, String id_str, sz col, sz row) @local {
+	TitleSlot* slot = (TitleSlot*)id;
+	Menu* m = slot.menu;
+	if (!m.open || m.selected == slot.index) return;
+	m.selected = slot.index;
+	m.item = 0;
+}
+
 fn void dropdown_dismissed(void* id, String id_str, sz col, sz row) @local {
 	Menu* m = (Menu*)id;
 	// A title already handled this press — it either moved the menu or closed
@@ -182,9 +198,11 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 	for (sz i = 0; i < MENU_COLS; i++) {
 		self.title_slots[i] = { .menu = self, .index = i };
 		bool highlighted = (focused || self.open) && i == self.selected;
-		xray::Node* title_node = milktea::text(highlighted ? active : bar, self.titles[i])
-			.fit_width();
-		title_node.id_with(&self.title_slots[i]).on_click(&title_clicked);
+		xray::Node* title_node = highlighted
+			? highlight(milktea::text(highlight_style(active), self.titles[i]), active.bg)
+			: milktea::text(bar, self.titles[i]);
+		title_node.fit_width().id_with(&self.title_slots[i])
+			.on_click(&title_clicked).on_hover_in(&title_hovered);
 		row.add(title_node);
 	}
 	row.add(milktea::text(filler, "").fill(1).window_drag(true));
@@ -195,13 +213,24 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 // item_row lays a label against its shortcut key: a padded box that pushes
 // the key to the right edge, however wide the panel turns out, and keeps at
 // least ITEM_GAP between them when the panel is sized to its widest row.
-fn xray::Node* Menu.item_row(&self, MenuItem mi, glaze::Style base) {
-	return milktea::hbox(base.pad_x(ITEM_PAD))
+fn xray::Node* Menu.item_row(&self, MenuItem mi, glaze::Style base, bool highlighted) {
+	if (!highlighted || !pixel_ui()) {
+		return milktea::hbox(base.pad_x(ITEM_PAD))
+			.with_justify(xray::JustifyContent.JUSTIFY_SPACE_BETWEEN)
+			.with_gap(ITEM_GAP)
+			.fit_height()
+			.add(milktea::text(base, mi.label).fit_width())
+			.add(milktea::text(base, mi.key).fit_width());
+	}
+	// In the GUI the highlight is a rounded fill under the whole row, so the
+	// label and key are drawn on it with clear backgrounds.
+	glaze::Style clear = highlight_style(base);
+	return highlight(milktea::hbox(clear.pad_x(ITEM_PAD)), base.bg)
 		.with_justify(xray::JustifyContent.JUSTIFY_SPACE_BETWEEN)
 		.with_gap(ITEM_GAP)
 		.fit_height()
-		.add(milktea::text(base, mi.label).fit_width())
-		.add(milktea::text(base, mi.key).fit_width());
+		.add(clear_bg(milktea::text(clear, mi.label).fit_width()))
+		.add(clear_bg(milktea::text(clear, mi.key).fit_width()));
 }
 
 // dropdown is a bordered box of item rows, as wide as its widest row but no
@@ -223,9 +252,9 @@ fn xray::Node* Menu.dropdown(&self, sz below, Theme* th) {
 
 	for (sz i = 0; i < MENU_ITEMS; i++) {
 		self.item_slots[i] = { .menu = self, .index = i };
-		glaze::Style s = i == self.item ? selected : item;
-		xray::Node* row_node = self.item_row(self.items[self.selected][i], s);
-		row_node.id_with(&self.item_slots[i]).on_click(&item_clicked);
+		bool hl = i == self.item;
+		xray::Node* row_node = self.item_row(self.items[self.selected][i], hl ? selected : item, hl);
+		row_node.id_with(&self.item_slots[i]).on_click(&item_clicked).on_hover_in(&item_hovered);
 		panel_node.add(row_node);
 	}
 	// Dropdowns start below the padded bar and share its horizontal inset.

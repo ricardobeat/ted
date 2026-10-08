@@ -96,3 +96,32 @@ fn xray::Node* floating(xray::Node* n, Theme* th, glaze::Color fill, glaze::Colo
 		.with_shadow(0.0f, 10.0f, 30.0f, dye::color_rgba(0, 0, 0, 140))
 		.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 22)));
 }
+
+// ── Highlights ─────────────────────────────────────────────────────────────
+//
+// The selected menu title and item are a block of colour in a terminal. In
+// the GUI they are a rounded fill, smaller in radius than the panel they sit
+// in, with the text drawn over it.
+
+const float HIGHLIGHT_RADIUS = 4.0f;
+
+// highlight_style is a highlighted style with its background taken off in the
+// GUI, where highlight() draws it instead.
+fn glaze::Style highlight_style(glaze::Style s) {
+	if (pixel_ui()) s.bg = {};
+	return s;
+}
+
+// highlight puts the rounded fill under a node built from highlight_style.
+fn xray::Node* highlight(xray::Node* n, glaze::Color bg) {
+	if (!pixel_ui()) return n;
+	return n.decorate(xray::solid(bg).round(HIGHLIGHT_RADIUS));
+}
+
+// clear_bg lets a node's text show what is under it in the GUI. The content
+// of a decorated node is painted with a clear background, and an invisible
+// decoration is enough for that; the GUI skips drawing it.
+fn xray::Node* clear_bg(xray::Node* n) {
+	if (!pixel_ui()) return n;
+	return n.decorate(xray::solid(xray::color_transparent()));
+}
