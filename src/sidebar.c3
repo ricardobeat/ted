@@ -209,11 +209,10 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 		.border = glaze::NORMAL, .border_color = th.border,
 		.border_bg = th.browser_bg,
 	});
-	xray::Node* v = sidebar_panel(milktea::vbox(panel), th)
-		.width(milktea::cells(content_w + SIDEBAR_BORDER));
+	xray::Node* v = sidebar_panel(milktea::vbox(panel), th);
 
 	// "Open" header
-	v.add(sidebar_text(bg, section_header(th, "Open", content_w)));
+	v.add(sidebar_header(th, "Open", "", content_w, false));
 
 	// Open-file rows.
 	if (ed.open_file_count == 0) {
@@ -257,7 +256,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 	// so it can apply the same focus logic as the open-files panel above.
 	sidebar_add_browser(ed, v, content_w, &bg, &file_row, &file_row_hover, &file_row_focused);
 
-	return v;
+	return sidebar_frame(v, content_w + SIDEBAR_BORDER, th);
 }
 
 // sidebar_add_browser appends the "Files" header and one row per visible file
@@ -269,8 +268,7 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 		glaze::Style* bg, glaze::Style* file_row,
 		glaze::Style* file_row_hover, glaze::Style* file_row_focused) @local {
 	Theme* th = &ed.theme;
-	String header = string::tformat(" Files: %s", ed.browser.current_dir);
-	v.add(sidebar_text(*bg, header));
+	v.add(sidebar_header(th, "Files", ed.browser.current_dir, content_w, true));
 
 	// The picker's tree_node() reserves 4 rows for title + hint + padding;
 	// the sidebar's header here replaces the title, so visible rows are the
@@ -327,18 +325,36 @@ fn xray::Node* sidebar_text(glaze::Style s, String text, bool lit = false) @loca
 	return lit ? highlight(n, s.bg) : clear_bg(n);
 }
 
-// sidebar_panel gives the GUI sidebar a source list's look: a very subtle
-// vertical gradient instead of a flat fill, and a hairline at its right
-// edge where the terminal draws a box. The hairline is an inner shadow
-// offset one point left with no blur, which leaves exactly a one-point
-// line along the right edge.
+// SIDEBAR_INSET is the space around the GUI sidebar's box, in points, which
+// leaves its rounded corners and shadow room to show.
+const sz SIDEBAR_INSET = 6;
+
+// sidebar_panel draws the GUI sidebar as a box of its own, like the terminal
+// one but with vector edges: rounded corners, a hairline border, a soft
+// shadow, and a very subtle vertical gradient for its fill (a touch lighter
+// at the top than at the bottom). It is wrapped in a margin so it floats
+// clear of the window edges rather than reading as a split pane.
 fn xray::Node* sidebar_panel(xray::Node* n, Theme* th) @local {
 	if (!pixel_ui()) return n;
 	glaze::Color top = dye::color_rgba(255, 255, 255, 7).blend_over(th.browser_bg);
 	glaze::Color bottom = dye::color_rgba(0, 0, 0, 12).blend_over(th.browser_bg);
-	return n.decorate(xray::linear(top, bottom, 90.0f)
-		.with_inner_shadow(-1.0f, 0.0f, 0.0f, th.border)
+	n.decorate(xray::linear(top, bottom, 90.0f)
+		.round(PANEL_RADIUS)
+		.with_border(1.0f, th.border)
+		.with_shadow(0.0f, 2.0f, 10.0f, dye::color_rgba(0, 0, 0, 90))
+		.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 14))
 		.padding(PANEL_PAD_Y, 0, PANEL_PAD_Y, 0));
+	return n;
+}
+
+// sidebar_frame puts the margin round the GUI sidebar, filled with the
+// editor's background so the box sits on the same surface as the text.
+fn xray::Node* sidebar_frame(xray::Node* panel, sz width_cells, Theme* th) @local {
+	if (!pixel_ui()) return panel.width(milktea::cells(width_cells));
+	return milktea::vstack().width(milktea::cells(width_cells))
+		.decorate(xray::solid(th.editor_bg)
+			.padding(SIDEBAR_INSET, SIDEBAR_INSET, SIDEBAR_INSET, SIDEBAR_INSET))
+		.add(panel.fill(1));
 }
 
 // sidebar_node is the panel the sidebar is drawn as in both backends. It is
@@ -365,13 +381,35 @@ fn void sidebar_init(Editor* ed) {
 	ed.doc.on_press(&editor_pressed, ed);
 }
 
-// section_header renders a section label followed by a dim rule that fills
-// the panel, so the sidebar reads as two labelled groups instead of running
-// the titles into the lists below them.
-fn String section_header(Theme* th, String label, sz content_w) {
+// sidebar_header is a section's title row. In a terminal it is the label
+// and a dim rule filling the panel, so the sidebar reads as labelled groups
+// rather than running the titles into the lists below them. In the GUI it is
+// a source list's section label: small caps in a dim colour with room above
+// it, which needs no rule to set it apart. detail follows the label, dimmer
+// still (the browser's directory). spaced adds the room above in the GUI for
+// a section that follows another.
+fn xray::Node* sidebar_header(Theme* th, String label, String detail, sz content_w, bool spaced) @local {
+	if (!pixel_ui()) {
+		return milktea::text({ .bg = th.browser_bg }, section_header(th, label, detail, content_w))
+			.height(milktea::cells(1));
+	}
+	glaze::Style title = { .fg = th.dim, .bold = true };
+	glaze::Style faint = { .fg = dye::color_rgba(0, 0, 0, 90).blend_over(th.dim) };
+	DString out = dstring::temp();
+	out.append_string(title.render(string::tformat("%s%s", SIDEBAR_PAD, label.to_upper_tcopy())));
+	if (detail.len > 0) out.append_string(faint.render(string::tformat("  %s", detail)));
+	return milktea::text({}, out.str_view()).height(milktea::cells(1))
+		.decorate(xray::solid(xray::color_transparent()).padding(spaced ? 4 : 0, 0, 2, 0));
+}
+
+// section_header renders the terminal's section title: the label, its
+// detail, and a dim rule that fills the rest of the panel.
+fn String section_header(Theme* th, String label, String detail, sz content_w) {
 	glaze::Style title = { .fg = th.accent, .bold = true };
 	glaze::Style rule = { .fg = th.border };
-	String head = string::tformat("%s%s ", SIDEBAR_PAD, label);
+	String head = detail.len > 0
+		? string::tformat("%s%s: %s ", SIDEBAR_PAD, label, detail)
+		: string::tformat("%s%s ", SIDEBAR_PAD, label);
 	sz fill = content_w - 2 - glaze::string_width(head);
 
 	DString out = dstring::temp();
