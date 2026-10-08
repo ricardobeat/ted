@@ -37,17 +37,17 @@ struct View (xray::Content) {
 
 	// Scroll position: the first line on screen, and how many of its wrapped
 	// rows are above the top.
-	int top_line;
-	int top_row;
+	sz top_line;
+	sz top_row;
 	// The text area's size at the last render, in cells, for commands that
 	// move by a screenful.
-	int text_width;
-	int height;
+	sz text_width;
+	sz height;
 
 	bool focused;
 	bool wrap;
 	bool line_numbers;
-	int tab_width;
+	sz tab_width;
 	// What Tab inserts and indent/dedent add or remove.
 	String indent_unit;
 
@@ -69,7 +69,7 @@ struct View (xray::Content) {
 	// rows was the most expensive part of drawing a frame, so it is rebuilt
 	// only when something rows depend on changes; row_key says what it was
 	// built for.
-	List{int} row_starts;
+	List{sz} row_starts;
 	RowKey row_key;
 
 	// Fired when a press lands in the view, after it has moved the caret.
@@ -83,10 +83,10 @@ alias ViewPressFn = fn void(void* ctx);
 // width and wrap settings, and the INLINE decorations, whose texts take up
 // cells. The layers are summarised by their item counts and text sizes.
 struct RowKey {
-	int version;
-	int width;
+	sz version;
+	sz width;
 	bool wrap;
-	int tab_width;
+	sz tab_width;
 	usz layers;
 }
 
@@ -95,7 +95,7 @@ const sz NO_POS = (sz)-1;
 
 struct Glyph {
 	String text;
-	int width;
+	sz width;
 	sz pos;
 	glaze::Style style;
 }
@@ -104,11 +104,11 @@ struct Glyph {
 struct Row {
 	sz first;
 	sz count;
-	int width;
+	sz width;
 }
 
 struct LineLayout {
-	int line;
+	sz line;
 	List{Glyph} glyphs;
 	List{Row} rows;
 }
@@ -162,7 +162,7 @@ fn String View.text(&self) => self.buf.str();
 fn Selection* View.primary(&self) => &self.sels[0];
 
 // layer returns the layer with this name, making it on first use.
-fn Layer* View.layer(&self, String name, int order = 0) {
+fn Layer* View.layer(&self, String name, sz order = 0) {
 	foreach (&l : self.layers) if (l.name == name) return l;
 	Layer l;
 	l.init(name, order);
@@ -174,11 +174,11 @@ fn Layer* View.layer(&self, String name, int order = 0) {
 
 // caret_line_col is the primary caret's line and column, both from zero,
 // the column counted in characters.
-fn void View.caret_line_col(&self, int* line, int* col) {
+fn void View.caret_line_col(&self, sz* line, sz* col) {
 	sz head = self.primary().head;
 	*line = self.buf.line_of(head);
 	String before = self.buf.str()[self.buf.line_start(*line):head - self.buf.line_start(*line)];
-	int n = 0;
+	sz n = 0;
 	foreach (c : before) if ((c & 0xC0) != 0x80) n++;
 	*col = n;
 }
@@ -239,7 +239,7 @@ fn void View.push_inlines(&self, LineLayout* out, sz pos) {
 			Decoration* d = &l.items[i];
 			if (d.kind != INLINE) continue;
 			String t = l.text_of(d);
-			out.glyphs.push({ .text = t, .width = (int)glaze::string_width(t), .pos = NO_POS,
+			out.glyphs.push({ .text = t, .width = (sz)glaze::string_width(t), .pos = NO_POS,
 				.style = overlay(self.text_style, d.style) });
 		}
 	}
@@ -247,7 +247,7 @@ fn void View.push_inlines(&self, LineLayout* out, sz pos) {
 
 // layout_line lays out one line at the given text width: its glyphs, and the
 // rows they wrap into. The lists come from temp memory.
-fn void View.layout_line(&self, int line, int width, LineLayout* out) {
+fn void View.layout_line(&self, sz line, sz width, LineLayout* out) {
 	out.line = line;
 	out.glyphs.init(tmem);
 	out.rows.init(tmem);
@@ -255,7 +255,7 @@ fn void View.layout_line(&self, int line, int width, LineLayout* out) {
 	sz start = self.buf.line_start(line);
 	sz end = self.buf.line_end(line);
 
-	int col = 0;
+	sz col = 0;
 	sz pos = start;
 	while (pos < end) {
 		self.push_inlines(out, pos);
@@ -264,11 +264,11 @@ fn void View.layout_line(&self, int line, int width, LineLayout* out) {
 		if (self.is_secondary_caret(pos)) s = overlay(s, self.caret_style);
 		sz n = glaze::utf8_sequence_len(text, pos);
 		if (text[pos] == '\t') {
-			int w = self.tab_width - col % self.tab_width;
+			sz w = self.tab_width - col % self.tab_width;
 			out.glyphs.push({ .text = "        "[:w], .width = w, .pos = pos, .style = s });
 			col += w;
 		} else {
-			int w = glaze::utf8_width_at(text, pos);
+			sz w = glaze::utf8_width_at(text, pos);
 			out.glyphs.push({ .text = text[pos:n], .width = w, .pos = pos, .style = s });
 			col += w;
 		}
@@ -296,7 +296,7 @@ fn bool View.is_secondary_caret(&self, sz pos) {
 
 // wrap_rows cuts the glyphs into rows no wider than width, breaking after a
 // space where one is near enough.
-fn void View.wrap_rows(&self, LineLayout* out, int width) {
+fn void View.wrap_rows(&self, LineLayout* out, sz width) {
 	Row row = { .first = 0 };
 	sz last_space = NO_POS;
 	for (sz i = 0; i < out.glyphs.len(); i++) {
@@ -322,13 +322,13 @@ fn void View.wrap_rows(&self, LineLayout* out, int width) {
 }
 
 // row_of finds where pos lands in a laid-out line: its row and column.
-fn void LineLayout.locate(&self, sz pos, int* row, int* col) {
+fn void LineLayout.locate(&self, sz pos, sz* row, sz* col) {
 	for (sz r = 0; r < self.rows.len(); r++) {
 		Row* rw = &self.rows[r];
-		int c = 0;
+		sz c = 0;
 		for (sz i = rw.first; i < rw.first + rw.count; i++) {
 			if (self.glyphs[i].pos == pos) {
-				*row = (int)r;
+				*row = (sz)r;
 				*col = c;
 				return;
 			}
@@ -336,15 +336,15 @@ fn void LineLayout.locate(&self, sz pos, int* row, int* col) {
 		}
 	}
 	// Not a glyph: the end of the line.
-	*row = (int)self.rows.len() - 1;
+	*row = (sz)self.rows.len() - 1;
 	*col = self.rows[self.rows.len() - 1].width;
 }
 
 // pos_at finds the byte a column of a row stands for: the glyph under it,
 // or the next real one after a hint, or the line's end past the text.
-fn sz LineLayout.pos_at(&self, int row, int col, sz line_end) {
+fn sz LineLayout.pos_at(&self, sz row, sz col, sz line_end) {
 	Row* rw = &self.rows[row];
-	int c = 0;
+	sz c = 0;
 	for (sz i = rw.first; i < self.glyphs.len(); i++) {
 		Glyph* g = &self.glyphs[i];
 		bool past_row = i >= rw.first + rw.count;
@@ -359,9 +359,9 @@ fn sz LineLayout.pos_at(&self, int row, int col, sz line_end) {
 // SCROLLBAR_W is the number of cells reserved on the right edge of the view
 // for the scrollbar: one cell of gap, then one cell of bar. The bar itself is
 // always one cell wide; the gap keeps it from kissing the text.
-const int SCROLLBAR_W = 2;
+const sz SCROLLBAR_W = 2;
 
-fn int View.scrollbar_reserved(&self) => SCROLLBAR_W;
+fn sz View.scrollbar_reserved(&self) => SCROLLBAR_W;
 
 // total_rows is the document's wrapped row count — what the scrollbar tracks.
 // Each line contributes the number of rows it wraps into at the view's text
@@ -369,7 +369,7 @@ fn int View.scrollbar_reserved(&self) => SCROLLBAR_W;
 // Render is itself called inside an @pool(), so a fresh tmem is already in
 // scope — layout_line's glyphs/rows lists live there and are released when
 // the caller exits.
-fn int View.total_rows(&self) {
+fn sz View.total_rows(&self) {
 	self.update_row_starts();
 	return self.row_starts[self.row_starts.len() - 1];
 }
@@ -384,14 +384,14 @@ fn void View.update_row_starts(&self) @local {
 		&& key.tab_width == self.row_key.tab_width && key.layers == self.row_key.layers) return;
 	self.row_key = key;
 	self.row_starts.clear();
-	int total = 0;
-	int lines = self.buf.line_count();
+	sz total = 0;
+	sz lines = self.buf.line_count();
 	@pool() {
-		for (int l = 0; l < lines; l++) {
+		for (sz l = 0; l < lines; l++) {
 			self.row_starts.push(total);
 			LineLayout ll;
 			self.layout_line(l, self.text_width, &ll);
-			total += (int)ll.rows.len();
+			total += (sz)ll.rows.len();
 		}
 	};
 	self.row_starts.push(total);
@@ -399,16 +399,16 @@ fn void View.update_row_starts(&self) @local {
 
 // first_visible_row_index is the wrapped-row index of the top of the screen,
 // counting from the document's start. The thumb's row comes from this.
-fn int View.first_visible_row_index(&self) {
+fn sz View.first_visible_row_index(&self) {
 	self.update_row_starts();
-	int line = self.top_line;
-	if (line >= self.row_starts.len()) line = (int)self.row_starts.len() - 1;
+	sz line = self.top_line;
+	if (line >= self.row_starts.len()) line = (sz)self.row_starts.len() - 1;
 	return self.row_starts[line] + self.top_row;
 }
 
 // append_scrollbar writes the gap cell and the bar cell at the end of a row.
 // drawn is the row's screen index so the thumb lands in the right cell.
-fn void View.append_scrollbar(&self, DString* out, int drawn, int bar_reserved, int thumb_row) {
+fn void View.append_scrollbar(&self, DString* out, sz drawn, sz bar_reserved, sz thumb_row) {
 	if (bar_reserved <= 0) return;
 	// The gap cell uses the text style so the background continues out to
 	// the bar — the bar itself is just a vertical line, not a panel.
@@ -422,18 +422,18 @@ fn void View.append_scrollbar(&self, DString* out, int drawn, int bar_reserved, 
 	out.append_string(bar);
 }
 
-fn int View.gutter_width(&self) {
+fn sz View.gutter_width(&self) {
 	if (!self.line_numbers) return 0;
-	int digits = 1;
-	for (int n = self.buf.line_count(); n >= 10; n /= 10) digits++;
+	sz digits = 1;
+	for (sz n = self.buf.line_count(); n >= 10; n /= 10) digits++;
 	if (digits < 3) digits = 3;
 	return digits + 2;
 }
 
-fn int View.rows_in(&self, int line) {
+fn sz View.rows_in(&self, sz line) {
 	LineLayout ll;
 	self.layout_line(line, self.text_width, &ll);
-	return (int)ll.rows.len();
+	return (sz)ll.rows.len();
 }
 
 // scroll_to_caret moves the view the least that brings the primary caret on
@@ -441,11 +441,11 @@ fn int View.rows_in(&self, int line) {
 fn void View.scroll_to_caret(&self) {
 	@pool() {
 		sz head = self.primary().head;
-		int line = self.buf.line_of(head);
+		sz line = self.buf.line_of(head);
 		LineLayout ll;
 		self.layout_line(line, self.text_width, &ll);
-		int row;
-		int col;
+		sz row;
+		sz col;
 		ll.locate(head, &row, &col);
 
 		if (line < self.top_line || (line == self.top_line && row < self.top_row)) {
@@ -455,16 +455,16 @@ fn void View.scroll_to_caret(&self) {
 		}
 		// Rows from the top of the screen down to the caret, counted only as
 		// far as a screenful.
-		int above = row - (line == self.top_line ? self.top_row : 0);
-		for (int l = line - 1; l >= self.top_line && above < self.height; l--) {
+		sz above = row - (line == self.top_line ? self.top_row : 0);
+		for (sz l = line - 1; l >= self.top_line && above < self.height; l--) {
 			above += l == self.top_line ? self.rows_in(l) - self.top_row : self.rows_in(l);
 		}
 		if (above < self.height) return;
 		// Below the screen: count a screenful up from the caret, so it lands
 		// on the bottom row.
-		int l = line;
-		int r = row;
-		for (int up = self.height - 1; up > 0; up--) {
+		sz l = line;
+		sz r = row;
+		for (sz up = self.height - 1; up > 0; up--) {
 			if (r > 0) {
 				r--;
 			} else if (l > 0) {
@@ -480,10 +480,10 @@ fn void View.scroll_to_caret(&self) {
 }
 
 // scroll moves the view by rows without moving the caret, as a wheel does.
-fn void View.scroll(&self, int rows) {
+fn void View.scroll(&self, sz rows) {
 	@pool() {
 		while (rows > 0) {
-			int left = self.rows_in(self.top_line) - self.top_row;
+			sz left = self.rows_in(self.top_line) - self.top_row;
 			if (self.top_line >= self.buf.line_count() - 1 && left <= 1) return;
 			if (left > 1) { self.top_row++; } else { self.top_line++; self.top_row = 0; }
 			rows--;
@@ -504,14 +504,14 @@ fn void View.scroll(&self, int rows) {
 
 // ── drawing ───────────────────────────────────────────────────────────────
 
-fn String spaces(int n) @local {
+fn String spaces(sz n) @local {
 	DString d = dstring::temp();
-	for (int i = 0; i < n; i++) d.append_char(' ');
+	for (sz i = 0; i < n; i++) d.append_char(' ');
 	return d.str_view();
 }
 
-fn String pad_left(String s, int width) @local {
-	return width > s.len ? string::tformat("%s%s", spaces(width - (int)s.len), s) : s;
+fn String pad_left(String s, sz width) @local {
+	return width > s.len ? string::tformat("%s%s", spaces(width - (sz)s.len), s) : s;
 }
 
 fn bool same_style(glaze::Style* a, glaze::Style* b) @local {
@@ -519,31 +519,31 @@ fn bool same_style(glaze::Style* a, glaze::Style* b) @local {
 }
 
 fn String View.render(&self, xray::Rect r) @dynamic {
-	int gutter = self.gutter_width();
+	sz gutter = self.gutter_width();
 	// The scrollbar lives in the last two cells of every row: one cell of
 	// breathing room, then the bar itself. Reserve that space before laying
 	// out text so a wrapped line never lands under it.
-	int bar_reserved = self.scrollbar_reserved();
+	sz bar_reserved = self.scrollbar_reserved();
 	self.rect = r;
 	self.text_width = r.w - gutter - bar_reserved;
 	self.height = r.h;
 	if (self.text_width < 1) self.text_width = 1;
-	int caret_line = self.buf.line_of(self.primary().head);
+	sz caret_line = self.buf.line_of(self.primary().head);
 
 	// The thumb sits at the row of the visible range that matches the view's
 	// place in the document. total_rows is the whole document's wrapped line
 	// count; visible_rows is what fits on screen. When the document fits, the
 	// thumb degenerates to a single cell that fills the column, so the bar is
 	// always present, never absent.
-	int total_rows = self.total_rows();
-	int visible_rows = r.h;
-	int thumb_row = -1;
+	sz total_rows = self.total_rows();
+	sz visible_rows = r.h;
+	sz thumb_row = -1;
 	if (total_rows > visible_rows && visible_rows > 1) {
 		// Which row of the document is on top of the screen, and how far
 		// the thumb's top edge should sit from the column's top.
-		int first_visible = self.first_visible_row_index();
-		int last_first = total_rows - visible_rows;
-		int span = visible_rows - 1;
+		sz first_visible = self.first_visible_row_index();
+		sz last_first = total_rows - visible_rows;
+		sz span = visible_rows - 1;
 		if (last_first > 0) thumb_row = (first_visible * span + last_first / 2) / last_first;
 	} else if (total_rows > 0 && total_rows <= visible_rows) {
 		// Everything fits: hide the thumb, leave the track so the column
@@ -552,8 +552,8 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 	}
 
 	DString out = dstring::temp();
-	int drawn = 0;
-	for (int line = self.top_line; line < self.buf.line_count() && drawn < r.h; line++) {
+	sz drawn = 0;
+	for (sz line = self.top_line; line < self.buf.line_count() && drawn < r.h; line++) {
 		LineLayout ll;
 		self.layout_line(line, self.text_width, &ll);
 		for (sz ri = line == self.top_line ? self.top_row : 0; ri < ll.rows.len() && drawn < r.h; ri++) {
@@ -575,7 +575,7 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 				}
 				out.append_string(s.render(run.str_view()));
 			}
-			int pad = self.text_width - row.width;
+			sz pad = self.text_width - row.width;
 			if (pad > 0) out.append_string(self.text_style.render(spaces(pad)));
 			self.append_scrollbar(&out, drawn, bar_reserved, thumb_row);
 			drawn++;
@@ -590,8 +590,8 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 	return out.str_view();
 }
 
-fn int View.measure(&self, int width) @dynamic => self.buf.line_count();
-fn int View.measure_width(&self, int height) @dynamic => self.text_width + self.gutter_width();
+fn sz View.measure(&self, sz width) @dynamic => self.buf.line_count();
+fn sz View.measure_width(&self, sz height) @dynamic => self.text_width + self.gutter_width();
 
 // ── Caret ───────────────────────────────────────────────────────────────────
 //
@@ -612,7 +612,7 @@ glaze::Style g_caret_style @local;
 // block caret readable — and a cell with nothing in it, past the end of a
 // line, draws as a blank block. blink is ignored: this caret is steady, the
 // way the terminal's cursor is in the terminal build.
-fn String draw_caret(int x, int y, bool blink, String under) {
+fn String draw_caret(sz x, sz y, bool blink, String under) {
 	String ch = under.len > 0 ? under : " ";
 	return g_caret_style.render(ch);
 }
@@ -622,33 +622,33 @@ fn xray::ContentCursor View.cursor(&self, xray::Rect r) @dynamic {
 	g_caret_style = self.caret_style;
 	if (!self.focused) return {};
 	sz head = self.primary().head;
-	int line = self.buf.line_of(head);
+	sz line = self.buf.line_of(head);
 	if (line < self.top_line) return {};
-	int row = 0;
-	for (int l = self.top_line; l < line && row <= r.h; l++) {
+	sz row = 0;
+	for (sz l = self.top_line; l < line && row <= r.h; l++) {
 		row += self.rows_in(l) - (l == self.top_line ? self.top_row : 0);
 	}
 	LineLayout ll;
 	self.layout_line(line, self.text_width, &ll);
-	int lrow;
-	int col;
+	sz lrow;
+	sz col;
 	ll.locate(head, &lrow, &col);
 	row += lrow - (line == self.top_line ? self.top_row : 0);
 	return xray::place_cursor(r, self.gutter_width() + col, row, self.caret);
 }
 
 // pos_at_cell is the buffer position under a cell of the view.
-fn sz View.pos_at_cell(&self, int col, int row) {
+fn sz View.pos_at_cell(&self, sz col, sz row) {
 	col -= self.gutter_width();
 	if (col < 0) col = 0;
-	int line = self.top_line;
-	int skip = self.top_row + row;
+	sz line = self.top_line;
+	sz skip = self.top_row + row;
 	@pool() {
 		while (line < self.buf.line_count()) {
 			LineLayout ll;
 			self.layout_line(line, self.text_width, &ll);
 			if (skip < ll.rows.len()) return ll.pos_at(skip, col, self.buf.line_end(line));
-			skip -= (int)ll.rows.len();
+			skip -= (sz)ll.rows.len();
 			line++;
 		}
 	};
@@ -664,7 +664,7 @@ fn void View.on_press(&self, ViewPressFn f, void* ctx) {
 	self.on_press_ctx = ctx;
 }
 
-fn void view_pressed(void* id, String id_str, int col, int row) @local {
+fn void view_pressed(void* id, String id_str, sz col, sz row) @local {
 	View* v = (View*)id;
 	v.sels.clear();
 	v.sels.push(caret(v.pos_at_cell(col, row)));

@@ -12,8 +12,8 @@ import std::collections::list;
 // buffer serve. The editor owns the rest: when to offer, narrowing as typing
 // goes on, choosing, and putting the choice in.
 
-const int MIN_PREFIX = 2;
-const int MAX_SHOWN = 8;
+const sz MIN_PREFIX = 2;
+const sz MAX_SHOWN = 8;
 
 struct Completion {
 	bool open;
@@ -23,7 +23,7 @@ struct Completion {
 	// The items' text, owned here: candidates are read from a buffer that
 	// the next keystroke changes.
 	DString texts;
-	int selected;
+	sz selected;
 }
 
 fn void Completion.init(&self) {
@@ -146,7 +146,7 @@ fn bool View.completion_key(&self, milktea::KeyMsg k) {
 	if (!c.open) return false;
 	switch (k.code) {
 		case UP:
-			c.selected = c.selected > 0 ? c.selected - 1 : (int)c.items.len() - 1;
+			c.selected = c.selected > 0 ? c.selected - 1 : (sz)c.items.len() - 1;
 		case DOWN:
 			c.selected = (sz)c.selected + 1 < c.items.len() ? c.selected + 1 : 0;
 		case TAB:
@@ -168,25 +168,25 @@ fn bool View.completion_key(&self, milktea::KeyMsg k) {
 fn xray::Node* View.completion_node(&self, glaze::Style item_style, glaze::Style selected_style) {
 	Completion* c = &self.completion;
 	if (!c.open || c.items.len() == 0) return null;
-	int col;
-	int row;
+	sz col;
+	sz row;
 	if (!self.caret_cell(&col, &row)) return null;
 
-	int width = 0;
-	foreach (item : c.items) if ((int)glaze::string_width(item) > width) width = (int)glaze::string_width(item);
+	sz width = 0;
+	foreach (item : c.items) if ((sz)glaze::string_width(item) > width) width = (sz)glaze::string_width(item);
 	width += 2;
 
 	// Line the items up under the start of the word, below the caret — or
 	// above it when there is no room below.
-	int prefix_cols = (int)(self.primary().head - c.start);
-	int x = self.rect.x + col - prefix_cols - 1;
+	sz prefix_cols = (sz)(self.primary().head - c.start);
+	sz x = self.rect.x + col - prefix_cols - 1;
 	if (x < 0) x = 0;
-	int y = self.rect.y + row + 1;
-	if (y + (int)c.items.len() > self.rect.y + self.rect.h) y = self.rect.y + row - (int)c.items.len();
+	sz y = self.rect.y + row + 1;
+	if (y + (sz)c.items.len() > self.rect.y + self.rect.h) y = self.rect.y + row - (sz)c.items.len();
 
 	xray::Node* list = milktea::vstack()
 		.width(milktea::cells(width))
-		.height(milktea::cells((int)c.items.len()))
+		.height(milktea::cells((sz)c.items.len()))
 		.at(x, y);
 	foreach (i, item : c.items) {
 		glaze::Style s = i == c.selected ? selected_style : item_style;
@@ -197,18 +197,18 @@ fn xray::Node* View.completion_node(&self, glaze::Style item_style, glaze::Style
 
 // caret_cell is where the primary caret is on screen, relative to the
 // view's rect; false when it is scrolled out of sight.
-fn bool View.caret_cell(&self, int* col, int* row) {
+fn bool View.caret_cell(&self, sz* col, sz* row) {
 	sz head = self.primary().head;
-	int line = self.buf.line_of(head);
+	sz line = self.buf.line_of(head);
 	if (line < self.top_line) return false;
-	int r = 0;
-	for (int l = self.top_line; l < line && r <= self.height; l++) {
+	sz r = 0;
+	for (sz l = self.top_line; l < line && r <= self.height; l++) {
 		r += self.rows_in(l) - (l == self.top_line ? self.top_row : 0);
 	}
 	LineLayout ll;
 	self.layout_line(line, self.text_width, &ll);
-	int lrow;
-	int c;
+	sz lrow;
+	sz c;
 	ll.locate(head, &lrow, &c);
 	r += lrow - (line == self.top_line ? self.top_row : 0);
 	if (r < 0 || r >= self.height) return false;

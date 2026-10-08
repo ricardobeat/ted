@@ -34,14 +34,14 @@ struct Decoration {
 struct Layer {
 	String name;
 	// Layers draw in order; a later layer's style goes over an earlier one's.
-	int order;
+	sz order;
 	// Kept sorted by start, so the view can walk them alongside the text.
 	List{Decoration} items;
 	// Owned copies of INLINE texts, freed with the layer.
 	DString texts;
 }
 
-fn void Layer.init(&self, String name, int order) {
+fn void Layer.init(&self, String name, sz order) {
 	self.name = name;
 	self.order = order;
 	self.items.init(mem);

@@ -9,33 +9,33 @@ struct MenuItem {
 	String key;
 }
 
-const int ITEM_PAD = 1;
-const int ITEM_GAP = 2;
+const sz ITEM_PAD = 1;
+const sz ITEM_GAP = 2;
 
-const int MENU_COLS  = 4;
-const int MENU_ITEMS = 4;
+const sz MENU_COLS  = 4;
+const sz MENU_ITEMS = 4;
 
 struct TitleSlot {
 	Menu* menu;
-	int index;
+	sz index;
 }
 
 struct ItemSlot {
 	Menu* menu;
-	int index;
+	sz index;
 }
 
 struct Menu {
 	String[MENU_COLS] titles;
 	// Cells to leave clear at the left of the bar, where a GUI window draws
 	// its own buttons. Both the bar and the dropdowns are placed after them.
-	int x_inset;
-	int[MENU_COLS] title_x;
+	sz x_inset;
+	sz[MENU_COLS] title_x;
 	MenuItem[MENU_COLS][MENU_ITEMS] items;
-	int selected;
-	int item;
+	sz selected;
+	sz item;
 	bool open;
-	int item_width;
+	sz item_width;
 	TitleSlot[MENU_COLS] title_slots;
 	ItemSlot[MENU_ITEMS] item_slots;
 	Chosen pending;
@@ -56,17 +56,17 @@ enum Chosen {
 
 // item_width is the narrowest a dropdown gets, border included; one with
 // longer items grows to fit them.
-fn Menu new_menu(String[MENU_COLS] titles, int item_width = 24) {
+fn Menu new_menu(String[MENU_COLS] titles, sz item_width = 24) {
 	Menu m = { .titles = titles, .item_width = item_width };
-	int x = 0;
-	for (int i = 0; i < MENU_COLS; i++) {
+	sz x = 0;
+	for (sz i = 0; i < MENU_COLS; i++) {
 		m.title_x[i] = x;
 		x += glaze::string_width(titles[i]);
 	}
 	return m;
 }
 
-fn void Menu.set_items(&self, int col, MenuItem[MENU_ITEMS] items) {
+fn void Menu.set_items(&self, sz col, MenuItem[MENU_ITEMS] items) {
 	if (col >= 0 && col < MENU_COLS) self.items[col] = items;
 }
 
@@ -122,7 +122,7 @@ fn Chosen Menu.take_pending(&self) {
 	return p;
 }
 
-fn void title_clicked(void* id, String id_str, int col, int row) @local {
+fn void title_clicked(void* id, String id_str, sz col, sz row) @local {
 	TitleSlot* slot = (TitleSlot*)id;
 	Menu* m = slot.menu;
 	m.title_press = true;
@@ -138,14 +138,14 @@ fn void title_clicked(void* id, String id_str, int col, int row) @local {
 	m.item = 0;
 }
 
-fn void item_clicked(void* id, String id_str, int col, int row) @local {
+fn void item_clicked(void* id, String id_str, sz col, sz row) @local {
 	ItemSlot* slot = (ItemSlot*)id;
 	slot.menu.item = slot.index;
 	slot.menu.open = false;
 	slot.menu.pending = Chosen.PICKED;
 }
 
-fn void dropdown_dismissed(void* id, String id_str, int col, int row) @local {
+fn void dropdown_dismissed(void* id, String id_str, sz col, sz row) @local {
 	Menu* m = (Menu*)id;
 	// A title already handled this press — it either moved the menu or closed
 	// it, and either way the panel must not undo that.
@@ -172,14 +172,14 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 
 	xray::Node* row = milktea::hstack()
 		.height(xray::pixels(top_bar_pixel_height() - BAR_PADDING_Y * 2, BAR_ROWS))
-		.decorate(xray::solid(milktea::to_cell_color(th.bar))
+		.decorate(xray::solid(th.bar)
 			.padding(BAR_PADDING_Y, BAR_PADDING_X, BAR_PADDING_Y, BAR_PADDING_X));
 	if (lead) {
 		row.add(lead);
 	} else if (self.x_inset > 0) {
 		row.add(milktea::text(filler, "").width(milktea::cells(self.x_inset)));
 	}
-	for (int i = 0; i < MENU_COLS; i++) {
+	for (sz i = 0; i < MENU_COLS; i++) {
 		self.title_slots[i] = { .menu = self, .index = i };
 		bool highlighted = (focused || self.open) && i == self.selected;
 		xray::Node* title_node = milktea::text(highlighted ? active : bar, self.titles[i])
@@ -206,7 +206,7 @@ fn xray::Node* Menu.item_row(&self, MenuItem mi, glaze::Style base) {
 
 // dropdown is a bordered box of item rows, as wide as its widest row but no
 // narrower than item_width, placed under the open title.
-fn xray::Node* Menu.dropdown(&self, int below, Theme* th) {
+fn xray::Node* Menu.dropdown(&self, sz below, Theme* th) {
 	if (!self.open) return null;
 
 	glaze::Style panel = {
@@ -219,10 +219,10 @@ fn xray::Node* Menu.dropdown(&self, int below, Theme* th) {
 
 	xray::Node* panel_node = milktea::vbox(panel)
 		.at(self.title_x[self.selected] + self.x_inset, below)
-		.shadow(milktea::shadow(2, 1).with_color(milktea::to_cell_color(th.shadow)));
+		.shadow(milktea::shadow(2, 1).with_color(th.shadow));
 	panel_node.id_with(self).on_click_outside(&dropdown_dismissed);
 
-	for (int i = 0; i < MENU_ITEMS; i++) {
+	for (sz i = 0; i < MENU_ITEMS; i++) {
 		self.item_slots[i] = { .menu = self, .index = i };
 		glaze::Style s = i == self.item ? selected : item;
 		xray::Node* row_node = self.item_row(self.items[self.selected][i], s);

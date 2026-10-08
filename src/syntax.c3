@@ -24,7 +24,7 @@ import std::os::env;
 // plain.
 
 const String SYNTAX_THEME = "monokai";
-const int MAX_PATH = 256;
+const sz MAX_PATH = 256;
 
 struct Syntax (editor::Assist) {
 	bool loaded;
@@ -34,14 +34,14 @@ struct Syntax (editor::Assist) {
 	char[MAX_PATH] path_buf;
 	sz path_len;
 	// The buffer version the layer was made from, to tell when it is stale.
-	int version;
+	sz version;
 	// The file's language in Helix's registry, for its auto-pairs.
 	helix::Language* language;
 	// The view being highlighted, and its syntax tree, parsed when asked
 	// for and kept until the text changes.
 	editor::View* view;
 	tree::Tree tree;
-	int tree_version;
+	sz tree_version;
 	bool has_tree;
 }
 

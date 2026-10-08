@@ -8,7 +8,7 @@ struct Selection {
 	// The display column vertical moves aim for, so moving down through a
 	// short line and on into a long one lands back where it started. -1 when
 	// the last move was not vertical.
-	int goal_col;
+	sz goal_col;
 }
 
 fn Selection caret(sz pos) => { .anchor = pos, .head = pos, .goal_col = -1 };

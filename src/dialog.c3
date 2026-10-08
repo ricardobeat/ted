@@ -4,16 +4,16 @@ import milktea;
 import glaze;
 import xray;
 
-const int DIALOG_BUTTONS = 2;
+const sz DIALOG_BUTTONS = 2;
 // Dialogs hug their content up to this many cells, border included, so a
 // long body wraps rather than stretching a panel across the whole window.
-const int DIALOG_MAX_COLS = 60;
+const sz DIALOG_MAX_COLS = 60;
 
 struct Dialog {
 	String title;
 	String body;
 	Button[DIALOG_BUTTONS] buttons;
-	int focused;
+	sz focused;
 	bool open;
 	Pressed pending;
 	ButtonSlot[DIALOG_BUTTONS] button_slots;
@@ -27,7 +27,7 @@ enum Pressed {
 
 struct ButtonSlot {
 	Dialog* dialog;
-	int index;
+	sz index;
 }
 
 fn Dialog new_dialog(String title, String body, String ok, String cancel) {
@@ -68,14 +68,14 @@ fn Pressed Dialog.take_pending(&self) {
 	return p;
 }
 
-fn void button_clicked(void* id, String id_str, int col, int row) @local {
+fn void button_clicked(void* id, String id_str, sz col, sz row) @local {
 	ButtonSlot* slot = (ButtonSlot*)id;
 	slot.dialog.focused = slot.index;
 	slot.dialog.open = false;
 	slot.dialog.pending = slot.index == 0 ? Pressed.CONFIRMED : Pressed.DISMISSED;
 }
 
-fn void backdrop_dismissed(void* id, String id_str, int col, int row) @local {
+fn void backdrop_dismissed(void* id, String id_str, sz col, sz row) @local {
 	Dialog* d = (Dialog*)id;
 	d.open = false;
 	d.pending = Pressed.DISMISSED;
@@ -100,7 +100,7 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 	xray::Node* panel_node = milktea::vbox(panel)
 		.with_gap(1)
 		.center()
-		.shadow(milktea::shadow(2, 1).with_color(milktea::to_cell_color(th.shadow)));
+		.shadow(milktea::shadow(2, 1).with_color(th.shadow));
 	panel_node.id_with(self).on_click_outside(&backdrop_dismissed);
 
 	panel_node.add(milktea::text(title_s, self.title).fit_height());
@@ -110,7 +110,7 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 		.with_gap(2)
 		.with_justify(xray::JustifyContent.JUSTIFY_CENTER)
 		.height(milktea::cells(2));
-	for (int i = 0; i < DIALOG_BUTTONS; i++) {
+	for (sz i = 0; i < DIALOG_BUTTONS; i++) {
 		self.button_slots[i] = { .dialog = self, .index = i };
 		String label = self.buttons[i].themed(th).with_focus(i == self.focused).view();
 		xray::Node* btn = milktea::text({ .bg = th.panel }, label)

@@ -10,7 +10,7 @@ const glaze::Border BUTTON_SHADOW = {
 	.bottom_right = "▘",
 };
 
-const int BUTTON_PAD = 2;
+const sz BUTTON_PAD = 2;
 
 struct Button (xray::Content) {
 	String label;
@@ -56,9 +56,9 @@ fn glaze::Style Button.style(&self) {
 
 fn String Button.view(&self) => self.style().render(self.label);
 
-fn int Button.measure(&self, int width) @dynamic => 2;
+fn sz Button.measure(&self, sz width) @dynamic => 2;
 
-fn int Button.measure_width(&self, int height) @dynamic {
+fn sz Button.measure_width(&self, sz height) @dynamic {
 	return glaze::string_width(self.label) + BUTTON_PAD * 2 + 1;
 }
 

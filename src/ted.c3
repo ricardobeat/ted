@@ -11,18 +11,18 @@ import std::core::dstring;
 import std::core::string;
 import std::os::env;
 
-const int BAR_ROWS = 1;
-const int STATUS_ROWS = 1;
-const int BAR_PADDING_Y = 4;
-const int BAR_PADDING_X = 8;
-const int WINDOW_LIGHT_DIAMETER = 14;
+const sz BAR_ROWS = 1;
+const sz STATUS_ROWS = 1;
+const sz BAR_PADDING_Y = 4;
+const sz BAR_PADDING_X = 8;
+const sz WINDOW_LIGHT_DIAMETER = 14;
 
-fn int top_bar_pixel_height() {
-	int height = milktea::layout_metrics().unit_h();
+fn sz top_bar_pixel_height() {
+	sz height = milktea::layout_metrics().unit_h();
 	if (height < WINDOW_LIGHT_DIAMETER) height = WINDOW_LIGHT_DIAMETER;
 	return height + BAR_PADDING_Y * 2;
 }
-const int STATUS_PAD = 2;
+const sz STATUS_PAD = 2;
 
 // Focus model.
 //
@@ -40,7 +40,7 @@ const int STATUS_PAD = 2;
 // UP and DOWN run through both as one list: DOWN past the last open file
 // lands on the browser's first row, UP from there goes back. TAB goes
 // between MENU_BAR and the sidebar. ESC always returns to EDITOR.
-enum Focus : int {
+enum Focus : sz {
 	FOCUS_EDITOR,
 	FOCUS_MENU_BAR,
 	FOCUS_SIDEBAR_FILES,
@@ -52,10 +52,10 @@ struct OpenFile {
 	sz path_len;
 }
 
-const int MAX_OPEN_FILES = 16;
+const sz MAX_OPEN_FILES = 16;
 // File-navigator rows visible at once. The picker keeps up to 64 entries;
 // this caps the per-row click slots the sidebar holds on the Editor.
-const int MAX_BROWSER_ROWS = 64;
+const sz MAX_BROWSER_ROWS = 64;
 
 struct Editor {
 	Menu menu;
@@ -70,8 +70,8 @@ struct Editor {
 	// creating a new file pushes onto this list. For now we only support a
 	// single buffer, but the data structure is here for future expansion.
 	OpenFile[MAX_OPEN_FILES] open_files;
-	int open_file_count;
-	int active_file;
+	sz open_file_count;
+	sz active_file;
 
 	// Per-row click slot for the open-files panel of the sidebar. Each row's
 	// id_with(&file_slots[i]) carries this address through the node tree to
@@ -79,17 +79,17 @@ struct Editor {
 	// stable across frames even though the node tree is rebuilt each call to
 	// view().
 	FileSlot[MAX_OPEN_FILES] file_slots;
-	int file_hover;
+	sz file_hover;
 	// Same role for the file-navigator rows: a stable pointer per row plus
 	// the row under the pointer. The browser owns its own data — names,
 	// is_dirs, current_dir — but the click and hover handlers live here so
 	// the sidebar can apply one style across both panels.
 	BrowserSlot[MAX_BROWSER_ROWS] browser_slots;
-	int browser_hover;
+	sz browser_hover;
 
 	// Cells reserved at the left of the top bar for window buttons drawn by
 	// the platform (see gui_main.c3); zero in the terminal.
-	int chrome_cells;
+	sz chrome_cells;
 	Focus focus;
 	// The path named on the command line, set by main() before the program
 	// starts. It may not exist yet: then the buffer starts empty under that
@@ -99,8 +99,8 @@ struct Editor {
 	Syntax syntax;
 	String status_msg;
 	bool modified;
-	int win_w;
-	int win_h;
+	sz win_w;
+	sz win_h;
 }
 
 fn milktea::Cmd Editor.init(Editor* self) @dynamic {
@@ -184,7 +184,7 @@ fn void open_from_env(Editor* e, String spec) {
 		if (i == spec.len || spec[i] == ',') {
 			if (i > start) {
 				String path = spec[start:i - start];
-				int idx = e.open_file_add(path);
+				sz idx = e.open_file_add(path);
 				if (idx >= 0) {
 					e.active_file = idx;
 					e.current_file = path;
@@ -198,8 +198,8 @@ fn void open_from_env(Editor* e, String spec) {
 
 // open_file_add pushes a path onto the open-files list, returning the new
 // index. If the path is already open, returns its existing index.
-fn int Editor.open_file_add(&self, String path) {
-	for (int i = 0; i < self.open_file_count; i++) {
+fn sz Editor.open_file_add(&self, String path) {
+	for (sz i = 0; i < self.open_file_count; i++) {
 		OpenFile* f = &self.open_files[i];
 		if (f.path_len != path.len) continue;
 		bool same = true;
@@ -221,7 +221,7 @@ fn int Editor.open_file_add(&self, String path) {
 // such as the sidebar pass temp-allocated strings that are freed once the
 // frame ends.
 fn void Editor.track_file(&self, String path) {
-	int idx = self.open_file_add(path);
+	sz idx = self.open_file_add(path);
 	if (idx < 0) {
 		self.current_file = path.copy(mem);
 		return;
@@ -283,7 +283,7 @@ fn void Editor.new_file(&self) {
 // from the sidebar keyboard handler and from the GUI click path — the click
 // fires regardless of which panel holds keyboard focus, so the user can jump
 // between open files without first focusing the sidebar.
-fn void Editor.activate_file(&self, int idx) {
+fn void Editor.activate_file(&self, sz idx) {
 	if (idx < 0 || idx >= self.open_file_count) return;
 	if (idx == self.active_file) return;
 	OpenFile* f = &self.open_files[idx];
@@ -402,7 +402,7 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 // set_zoom steps the GUI font size, or returns it to the default when steps
 // is zero. The terminal build has no font of its own — the terminal owns it —
 // so there it says so rather than pretending to have changed something.
-fn void Editor.set_zoom(&self, int steps) {
+fn void Editor.set_zoom(&self, sz steps) {
 	$if $feat(MILKTEA_GUI):
 		bool moved = steps == 0 ? set_text_size(GUI_TEXT_DEFAULT) : zoom(steps);
 		self.status_msg = moved
@@ -458,7 +458,7 @@ fn milktea::Cmd Editor.handle_editor_key(&self, milktea::KeyMsg k) {
 	// What a key does can depend on the language (pairs, strings, tags), so
 	// the view's idea of it must be current even before the first frame.
 	self.syntax.highlight(&self.doc, self.current_file);
-	int before = self.doc.buf.version;
+	sz before = self.doc.buf.version;
 	self.doc.handle_key(k);
 	if (self.doc.buf.version != before) self.modified = true;
 	return null;
@@ -625,8 +625,8 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	} else {
 		file_label = "  [new]";
 	}
-	int caret_line;
-	int caret_col;
+	sz caret_line;
+	sz caret_col;
 	self.doc.caret_line_col(&caret_line, &caret_col);
 	String cursor_label = string::tformat("  Ln %d, Col %d  ", caret_line + 1, caret_col + 1);
 
@@ -651,9 +651,9 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		file_label, cursor_label, self.status_msg);
 
 	xray::LayoutMetrics metrics = milktea::layout_metrics();
-	int bar_extra = metrics.pixels
+	sz bar_extra = metrics.pixels
 		? top_bar_pixel_height() - BAR_ROWS * metrics.unit_h() + BAR_PADDING_Y * 2 : 0;
-	int editor_h = (milktea::layout_area().h - bar_extra) / metrics.unit_h()
+	sz editor_h = (milktea::layout_area().h - bar_extra) / metrics.unit_h()
 		- BAR_ROWS - STATUS_ROWS;
 	if (editor_h < 1) editor_h = 1;
 
@@ -701,10 +701,10 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		.add(status_row);
 
 	statusbar.decorate(xray::linear(
-		milktea::to_cell_color(th.status_bg),
-		milktea::to_cell_color(th.bar), 90.0f).padding(BAR_PADDING_Y, BAR_PADDING_X, BAR_PADDING_Y, BAR_PADDING_X));
+		th.status_bg,
+		th.bar, 90.0f).padding(BAR_PADDING_Y, BAR_PADDING_X, BAR_PADDING_Y, BAR_PADDING_X));
 
-	int sidebar_w = sidebar_panel_width(self);
+	sz sidebar_w = sidebar_panel_width(self);
 	xray::Rect editor_area = {
 		.x = sidebar_w,
 		.y = BAR_ROWS,
@@ -745,7 +745,7 @@ fn int main(String[] args) @feat(!MILKTEA_GUI) {
 	if (args.len > 1 && args[1] == "--render") return dump_render();
 	Editor e = { };
 	if (args.len > 1) e.open_arg = args[1];
-	return milktea::@run(&e);
+	return milktea::@run(&e, { .alt_screen = true });
 }
 
 fn int dump_render() {

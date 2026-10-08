@@ -139,8 +139,8 @@ fn void View.tab(&self) {
 	}
 	// Up to the next stop, so Tab lines things up rather than adding a fixed
 	// amount wherever it is pressed.
-	int line;
-	int col;
+	sz line;
+	sz col;
 	self.caret_line_col(&line, &col);
 	sz unit = self.indent_unit.len;
 	self.insert_text(self.indent_unit[:unit - col % unit]);
@@ -152,13 +152,13 @@ fn void View.indent_lines(&self, bool in) {
 	@pool() {
 		Step* step = self.history.begin(OTHER, self.sels.array_view());
 		// Every line touched, last first, each once.
-		List{int} lines;
+		List{sz} lines;
 		lines.init(tmem);
 		foreach (s : self.sels) {
-			int last = self.buf.line_of(s.end());
+			sz last = self.buf.line_of(s.end());
 			// A selection ending at the very start of a line leaves it alone.
 			if (last > self.buf.line_of(s.start()) && self.buf.line_start(last) == s.end()) last--;
-			for (int l = self.buf.line_of(s.start()); l <= last; l++) {
+			for (sz l = self.buf.line_of(s.start()); l <= last; l++) {
 				if (!lines.contains(l)) lines.push(l);
 			}
 		}
@@ -267,7 +267,7 @@ fn void View.kill_line(&self) {
 			sz start = s.start();
 			sz end = s.end();
 			if (s.is_empty()) {
-				int line = self.buf.line_of(start);
+				sz line = self.buf.line_of(start);
 				start = self.buf.line_start(line);
 				end = line + 1 < self.buf.line_count() ? self.buf.line_start(line + 1) : self.buf.len();
 			}
@@ -316,7 +316,7 @@ fn void View.move(&self, Motion m, bool extend = false) {
 				*s = caret(m == CHAR_LEFT ? s.start() : s.end());
 				continue;
 			}
-			int goal = s.goal_col;
+			sz goal = s.goal_col;
 			sz head = self.target(s.head, m, &goal);
 			s.head = head;
 			if (!extend) s.anchor = head;
@@ -329,9 +329,9 @@ fn void View.move(&self, Motion m, bool extend = false) {
 	self.scroll_to_caret();
 }
 
-fn sz View.target(&self, sz pos, Motion m, int* goal) {
+fn sz View.target(&self, sz pos, Motion m, sz* goal) {
 	String text = self.buf.str();
-	int line = self.buf.line_of(pos);
+	sz line = self.buf.line_of(pos);
 	switch (m) {
 		case CHAR_LEFT: return prev_char(text, pos);
 		case CHAR_RIGHT: return next_char(text, pos);
@@ -355,12 +355,12 @@ fn sz View.target(&self, sz pos, Motion m, int* goal) {
 
 // by_rows moves n screen rows up or down, wrapped rows included, keeping to
 // the goal column.
-fn sz View.by_rows(&self, sz pos, int n, int* goal) {
-	int line = self.buf.line_of(pos);
+fn sz View.by_rows(&self, sz pos, sz n, sz* goal) {
+	sz line = self.buf.line_of(pos);
 	LineLayout ll;
 	self.layout_line(line, self.text_width, &ll);
-	int row;
-	int col;
+	sz row;
+	sz col;
 	ll.locate(pos, &row, &col);
 	if (*goal < 0) *goal = col;
 	row += n;
@@ -368,11 +368,11 @@ fn sz View.by_rows(&self, sz pos, int n, int* goal) {
 		if (line == 0) return 0;
 		line--;
 		self.layout_line(line, self.text_width, &ll);
-		row += (int)ll.rows.len();
+		row += (sz)ll.rows.len();
 	}
 	while (row >= ll.rows.len()) {
 		if (line + 1 >= self.buf.line_count()) return self.buf.len();
-		row -= (int)ll.rows.len();
+		row -= (sz)ll.rows.len();
 		line++;
 		self.layout_line(line, self.text_width, &ll);
 	}

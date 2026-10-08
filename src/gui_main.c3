@@ -23,8 +23,8 @@ import std::os::env;
 //
 // tools/make_font.py holds every glyph to one advance, so these two numbers
 // describe the merged symbols as well as the letters.
-const int FONT_ADVANCE_EM = 600;  // JetBrains Mono hmtx, per 1000-unit em
-const int FONT_LINE_EM = 1320;    // its hhea ascent 1020 over descent -300
+const sz FONT_ADVANCE_EM = 600;  // JetBrains Mono hmtx, per 1000-unit em
+const sz FONT_LINE_EM = 1320;    // its hhea ascent 1020 over descent -300
 
 // The cell sizes. A point size divides into whole cells only when it is a
 // multiple of 11 — 600/1320 is 5/11 — so 11, 22 and 33 are exact; the rest
@@ -40,7 +40,7 @@ const int FONT_LINE_EM = 1320;    // its hhea ascent 1020 over descent -300
 // The gaps matter: a size sits in the first rung at least as tall as itself,
 // so a sparse ladder puts small text in a tall cell. These are close enough
 // together that no size is ever more than 2 pt short of its row.
-enum FontSize : int (int pt)
+enum FontSize : sz (sz pt)
 {
 	PT11 { 11 },
 	PT13 { 13 },
@@ -55,15 +55,15 @@ enum FontSize : int (int pt)
 
 // 16 pt sits between rungs: the text draws at 16, centred in a 20 pt cell,
 // with its rules at 20.
-const int GUI_TEXT_DEFAULT = 16;
+const sz GUI_TEXT_DEFAULT = 16;
 
 // Bounds for a size asked for by point rather than by rung. Below the first
 // rung there is no cell to round up to, and above the last the ladder ends.
-const int TEXT_PT_MIN = FontSize.PT11.pt;
-const int TEXT_PT_MAX = FontSize.PT33.pt;
+const sz TEXT_PT_MIN = FontSize.PT11.pt;
+const sz TEXT_PT_MAX = FontSize.PT33.pt;
 
 // cell_w_for is the same arithmetic for a size picked at run time.
-fn int cell_w_for(int pt) =>
+fn sz cell_w_for(sz pt) =>
 	(pt * FONT_ADVANCE_EM + FONT_LINE_EM / 2) / FONT_LINE_EM;
 
 // cell_step_for picks the cell a point size is drawn into: the first rung of
@@ -72,8 +72,8 @@ fn int cell_w_for(int pt) =>
 // so a 16 pt face gets the 20 pt cell, with the leftover 4 points split above
 // and below the line by milktea, and its box rules drawn at 20 so they still
 // meet across rows.
-fn FontSize cell_step_for(int pt) {
-	for (int i = 0; i <= (int)FontSize.PT33.ordinal; i++) {
+fn FontSize cell_step_for(sz pt) {
+	for (sz i = 0; i <= (sz)FontSize.PT33.ordinal; i++) {
 		FontSize f = FontSize::from_ordinal(i);
 		if (f.pt >= pt) return f;
 	}
@@ -82,17 +82,17 @@ fn FontSize cell_step_for(int pt) {
 
 // The point size the text is drawing at now, and the rung its cell came from.
 // They are equal at every rung of the ladder and differ only in between.
-int g_text_pt @local = GUI_TEXT_DEFAULT;
+sz g_text_pt @local = GUI_TEXT_DEFAULT;
 FontSize g_font_size @local = FontSize.PT20;
 
 fn FontSize font_size() => g_font_size;
-fn int text_size() => g_text_pt;
+fn sz text_size() => g_text_pt;
 
 // start_font_size reads TED_FONT_SIZE, so the window can be opened at a size
 // other than the default — the same hook TED_FOCUS and TED_OPEN give the rest
 // of the view, and the only way a screenshot can be taken at another size.
 // A value that is not one of the ladder's point sizes is ignored.
-fn int start_text_size() @local {
+fn sz start_text_size() @local {
 	if (try want = env::tget_var("TED_FONT_SIZE")) {
 		if (try pt = want.to_int()) {
 			if (pt >= TEXT_PT_MIN && pt <= TEXT_PT_MAX) return pt;
@@ -105,11 +105,11 @@ fn bool set_font_size(FontSize size) => set_text_size(size.pt);
 
 // set_text_size takes any point size, not only a rung. The cell follows from
 // cell_step_for, so the grid stays whole whatever is asked for.
-fn bool set_text_size(int pt) {
+fn bool set_text_size(sz pt) {
 	if (pt < TEXT_PT_MIN || pt > TEXT_PT_MAX || pt == g_text_pt) return false;
 	g_text_pt = pt;
 	g_font_size = cell_step_for(pt);
-	milktea_gui::set_cell_size(cell_w_for(g_font_size.pt), g_font_size.pt, pt);
+	milktea_gui::set_cell_size((int)cell_w_for(g_font_size.pt), (int)g_font_size.pt, (int)pt);
 	return true;
 }
 
@@ -118,7 +118,7 @@ fn bool set_text_size(int pt) {
 // a run of sizes shares a cell and the window keeps its column count until
 // the next rung is crossed. At either end it stays put and reports false, so
 // a caller can say so rather than silently doing nothing.
-fn bool zoom(int steps) => set_text_size(g_text_pt + steps);
+fn bool zoom(sz steps) => set_text_size(g_text_pt + steps);
 
 // The GUI uses JetBrains Mono, which ships with the app rather than the
 // system. It has no braille, few geometric shapes and only some of the arrows
@@ -140,7 +140,7 @@ const String[*] GUI_FONT_FILES = {
 // and the working directory covers a binary run from elsewhere in the tree.
 fn String[] font_dirs() @local {
 	String[] dirs = mem::new_array(String, 3);
-	int n = 0;
+	sz n = 0;
 	if (try exe = env::executable_path()) {
 		dirs[n++] = string::tformat("%s/../assets/fonts", exe);
 		dirs[n++] = string::tformat("%s/assets/fonts", exe);
@@ -189,7 +189,7 @@ fn int main(String[] args) {
 	// with the buttons hidden there is nothing left to measure.
 	g_text_pt = start_text_size();
 	g_font_size = cell_step_for(g_text_pt);
-	int cell_w = cell_w_for(g_font_size.pt);
+	sz cell_w = cell_w_for(g_font_size.pt);
 	e.chrome_cells = chrome_on_left() ? CHROME_CELLS : 0;
 	// The window has no terminal cursor to place, so the caret is painted into
 	// the grid instead of left to the host (see draw_caret).
@@ -199,8 +199,8 @@ fn int main(String[] args) {
 	milktea_gui::run((milktea::Model)&e, {
 		.title = "ted",
 		.cols = 100, .rows = 30,
-		.cell_w = cell_w, .cell_h = g_font_size.pt,
-		.font_size = g_text_pt,
+		.cell_w = (int)cell_w, .cell_h = (int)g_font_size.pt,
+		.font_size = (int)g_text_pt,
 		.chrome_rows = 1,
 		.hide_window_buttons = true,
 		.screenshot_path = shot ?? "",

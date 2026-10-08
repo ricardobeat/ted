@@ -8,10 +8,10 @@ import std::io;
 import std::core::string;
 import std::core::dstring;
 
-const int SIDEBAR_WIDTH_MAX = 38; // widest the sidebar's content gets; the
+const sz SIDEBAR_WIDTH_MAX = 38; // widest the sidebar's content gets; the
                                   // border adds two more on top of this
-const int SIDEBAR_WIDTH_MIN = 30; // narrowest the sidebar ever shrinks to
-const int SIDEBAR_BORDER = 2; // one cell on each side for the panel border
+const sz SIDEBAR_WIDTH_MIN = 30; // narrowest the sidebar ever shrinks to
+const sz SIDEBAR_BORDER = 2; // one cell on each side for the panel border
 // Cells between the panel's border and the text in it. One is enough to keep
 // the names off the rule; the cursor marker takes this cell on the row it is
 // on, so marked and unmarked rows still start in the same column.
@@ -42,10 +42,10 @@ fn String sidebar_basename(String path) {
 
 struct FileSlot {
 	Editor* ed;
-	int index;
+	sz index;
 }
 
-fn void file_row_clicked(void* id, String id_str, int col, int row) @local {
+fn void file_row_clicked(void* id, String id_str, sz col, sz row) @local {
 	FileSlot* s = (FileSlot*)id;
 	s.ed.activate_file(s.index);
 	// A click on a list row is also what puts the keyboard on that list, the
@@ -54,12 +54,12 @@ fn void file_row_clicked(void* id, String id_str, int col, int row) @local {
 	s.ed.focus = FOCUS_SIDEBAR_FILES;
 }
 
-fn void file_row_hover_in(void* id, String id_str, int col, int row) @local {
+fn void file_row_hover_in(void* id, String id_str, sz col, sz row) @local {
 	FileSlot* s = (FileSlot*)id;
 	s.ed.file_hover = s.index;
 }
 
-fn void file_row_hover_out(void* id, String id_str, int col, int row) @local {
+fn void file_row_hover_out(void* id, String id_str, sz col, sz row) @local {
 	FileSlot* s = (FileSlot*)id;
 	if (s.ed.file_hover == s.index) s.ed.file_hover = -1;
 }
@@ -74,7 +74,7 @@ fn void file_row_hover_out(void* id, String id_str, int col, int row) @local {
 // panel the keyboard ends up on follows from what the click meant: opening a
 // file is editing, navigating a directory is browsing.
 
-fn void browser_row_clicked(void* id, String name, bool is_dir, int col, int row) @local {
+fn void browser_row_clicked(void* id, String name, bool is_dir, sz col, sz row) @local {
 	Editor* ed = (Editor*)id;
 	if (is_dir) {
 		String path = ed.browser.current_dir;
@@ -101,13 +101,13 @@ fn void browser_row_clicked(void* id, String name, bool is_dir, int col, int row
 // contrast, is allocated fresh on tmem each frame).
 struct BrowserSlot {
 	Editor* ed;
-	int index;
+	sz index;
 }
 
-fn void browser_row_index_clicked(void* id, String id_str, int col, int row) @local {
+fn void browser_row_index_clicked(void* id, String id_str, sz col, sz row) @local {
 	BrowserSlot* s = (BrowserSlot*)id;
 	Editor* ed = s.ed;
-	int i = s.index;
+	sz i = s.index;
 	if (i < 0 || i >= ed.browser.count) return;
 	// Keep the picker's own state in sync: a click should move the keyboard
 	// cursor there too, so the next arrow key continues from the same row.
@@ -117,12 +117,12 @@ fn void browser_row_index_clicked(void* id, String id_str, int col, int row) @lo
 	browser_row_clicked(ed, name, ed.browser.is_dirs[i], col, row);
 }
 
-fn void browser_row_hover_in(void* id, String id_str, int col, int row) @local {
+fn void browser_row_hover_in(void* id, String id_str, sz col, sz row) @local {
 	BrowserSlot* s = (BrowserSlot*)id;
 	s.ed.browser_hover = s.index;
 }
 
-fn void browser_row_hover_out(void* id, String id_str, int col, int row) @local {
+fn void browser_row_hover_out(void* id, String id_str, sz col, sz row) @local {
 	BrowserSlot* s = (BrowserSlot*)id;
 	if (s.ed.browser_hover == s.index) s.ed.browser_hover = -1;
 }
@@ -168,23 +168,23 @@ fn void editor_pressed(void* id) @local {
 // own magenta style; the sidebar wants the cursor row to use the same accent
 // highlight as the active file row, with no caret prefix — the two panels
 // reading as one list means the highlight rules should be the same too.
-fn int sidebar_content_width(Editor* ed) {
+fn sz sidebar_content_width(Editor* ed) {
 	// One cell of leading pad, then the name. The ▸ mark on the active file
 	// and the [+]/[/] suffix are row extras that already sit in the same
 	// cells as the pad and the trailing space — we only add them when they
 	// are the widest thing on the row.
-	int w = 2; // the leading pad, the minimum
-	for (int i = 0; i < ed.open_file_count; i++) {
+	sz w = 2; // the leading pad, the minimum
+	for (sz i = 0; i < ed.open_file_count; i++) {
 		OpenFile* f = &ed.open_files[i];
 		String path = (String)f.path_buf[:f.path_len];
 		String name = sidebar_basename(path);
-		int row = 1 + (int)name.len;
+		sz row = 1 + (sz)name.len;
 		if (i == ed.active_file && ed.modified) row += 4; // " [+]"
 		if (row > w) w = row;
 	}
-	for (int i = 0; i < ed.browser.count; i++) {
+	for (sz i = 0; i < ed.browser.count; i++) {
 		String name = (String)ed.browser.names[i][:ed.browser.name_lens[i]];
-		int row = 1 + (int)name.len;
+		sz row = 1 + (sz)name.len;
 		if (ed.browser.is_dirs[i]) row += 1; // trailing "/"
 		if (row > w) w = row;
 	}
@@ -195,7 +195,7 @@ fn int sidebar_content_width(Editor* ed) {
 
 fn xray::Node* sidebar_tree(Editor* ed) {
 	Theme* th = &ed.theme;
-	int content_w = sidebar_content_width(ed);
+	sz content_w = sidebar_content_width(ed);
 	glaze::Style bg = { .bg = th.browser_bg, .fg = th.browser_fg };
 	glaze::Style file_row = { .fg = th.browser_fg, .bg = th.browser_bg };
 	glaze::Style file_row_hover = { .fg = th.text, .bg = th.selection };
@@ -228,7 +228,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 		// it, the file-navigator otherwise. Highlighting both rows at once
 		// would say "two things are selected" and confuse the arrows.
 		bool files_active = ed.focus == FOCUS_SIDEBAR_FILES;
-		for (int i = 0; i < ed.open_file_count; i++) {
+		for (sz i = 0; i < ed.open_file_count; i++) {
 			OpenFile* f = &ed.open_files[i];
 			String path = (String)f.path_buf[:f.path_len];
 			String name = sidebar_basename(path);
@@ -266,7 +266,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 // reconciliation, the same rules its own tree_node() follows. The cursor
 // row takes the same file_row_focused style as the active file above, so
 // the two panels read as a single highlighted list.
-fn void sidebar_add_browser(Editor* ed, xray::Node* v, int content_w,
+fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 		glaze::Style* bg, glaze::Style* file_row,
 		glaze::Style* file_row_hover, glaze::Style* file_row_focused) @local {
 	Theme* th = &ed.theme;
@@ -276,14 +276,14 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, int content_w,
 	// The picker's tree_node() reserves 4 rows for title + hint + padding;
 	// the sidebar's header here replaces the title, so visible rows are the
 	// height minus 1 (hint) minus padding rows when the directory is short.
-	int visible = ed.browser.height - 4;
+	sz visible = ed.browser.height - 4;
 	if (visible < 1) visible = 1;
 	// Reconcile scroll with cursor: picker's own tree_node() does the same.
 	if (ed.browser.cursor < ed.browser.scroll) ed.browser.scroll = ed.browser.cursor;
 	if (ed.browser.cursor >= ed.browser.scroll + visible) {
 		ed.browser.scroll = ed.browser.cursor - visible + 1;
 	}
-	int end = ed.browser.scroll + visible;
+	sz end = ed.browser.scroll + visible;
 	if (end > ed.browser.count) end = ed.browser.count;
 
 	// Same rule as the open-files panel above: the accent highlight follows
@@ -291,7 +291,7 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, int content_w,
 	// When focus is on the files panel the browser row stays plain, and vice
 	// versa — two highlighted rows would read as two selections.
 	bool browser_active = ed.focus == FOCUS_SIDEBAR_BROWSER;
-	for (int i = ed.browser.scroll; i < end; i++) {
+	for (sz i = ed.browser.scroll; i < end; i++) {
 		String name = (String)ed.browser.names[i][:ed.browser.name_lens[i]];
 		String suffix = ed.browser.is_dirs[i] ? "/" : "";
 		bool is_cursor = i == ed.browser.cursor;
@@ -311,8 +311,8 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, int content_w,
 	}
 	// Pad with blank rows so the sidebar keeps its height when the directory
 	// is shorter than the slot — without this, the status bar would slide up.
-	int pad = visible - (end - ed.browser.scroll);
-	for (int i = 0; i < pad; i++) {
+	sz pad = visible - (end - ed.browser.scroll);
+	for (sz i = 0; i < pad; i++) {
 		v.add(milktea::text(*bg, "").height(milktea::cells(1)));
 	}
 	glaze::Style hint_style = { .fg = th.dim, .bg = th.browser_bg };
@@ -329,7 +329,7 @@ fn xray::Node* sidebar_node(Editor* ed) => sidebar_tree(ed);
 
 // sidebar_panel_width reports the total cells the sidebar occupies including
 // its border, so dialogs and the editor column can sit cleanly to its right.
-fn int sidebar_panel_width(Editor* ed) {
+fn sz sidebar_panel_width(Editor* ed) {
 	return sidebar_content_width(ed) + SIDEBAR_BORDER;
 }
 
@@ -347,17 +347,17 @@ fn void sidebar_init(Editor* ed) {
 // section_header renders a section label followed by a dim rule that fills
 // the panel, so the sidebar reads as two labelled groups instead of running
 // the titles into the lists below them.
-fn String section_header(Theme* th, String label, int content_w) {
+fn String section_header(Theme* th, String label, sz content_w) {
 	glaze::Style title = { .fg = th.accent, .bold = true };
 	glaze::Style rule = { .fg = th.border };
 	String head = string::tformat("%s%s ", SIDEBAR_PAD, label);
-	int fill = content_w - 2 - glaze::string_width(head);
+	sz fill = content_w - 2 - glaze::string_width(head);
 
 	DString out = dstring::temp();
 	out.append_string(title.render(head));
 	if (fill > 0) {
 		DString dashes = dstring::temp();
-		for (int i = 0; i < fill; i++) dashes.append_string("─");
+		for (sz i = 0; i < fill; i++) dashes.append_string("─");
 		out.append_string(rule.render(dashes.str_view()));
 	}
 	return out.str_view();
