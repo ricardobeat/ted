@@ -14,6 +14,8 @@ struct Dialog {
 	String body;
 	Button[DIALOG_BUTTONS] buttons;
 	sz focused;
+	// The button under the pointer, -1 for none.
+	sz hover;
 	bool open;
 	Pressed pending;
 	ButtonSlot[DIALOG_BUTTONS] button_slots;
@@ -35,6 +37,7 @@ fn Dialog new_dialog(String title, String body, String ok, String cancel) {
 		.title = title,
 		.body = body,
 		.buttons = { new_button(ok), new_button(cancel) },
+		.hover = -1,
 	};
 }
 
@@ -75,6 +78,16 @@ fn void button_clicked(void* id, String id_str, sz col, sz row) @local {
 	slot.dialog.pending = slot.index == 0 ? Pressed.CONFIRMED : Pressed.DISMISSED;
 }
 
+fn void button_hover_in(void* id, String id_str, sz col, sz row) @local {
+	ButtonSlot* slot = (ButtonSlot*)id;
+	slot.dialog.hover = slot.index;
+}
+
+fn void button_hover_out(void* id, String id_str, sz col, sz row) @local {
+	ButtonSlot* slot = (ButtonSlot*)id;
+	if (slot.dialog.hover == slot.index) slot.dialog.hover = -1;
+}
+
 fn void backdrop_dismissed(void* id, String id_str, sz col, sz row) @local {
 	Dialog* d = (Dialog*)id;
 	d.open = false;
@@ -112,10 +125,11 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 	if (pixel_ui()) { buttons_row.fit_height(); } else { buttons_row.height(milktea::cells(2)); }
 	for (sz i = 0; i < DIALOG_BUTTONS; i++) {
 		self.button_slots[i] = { .dialog = self, .index = i };
-		Button b = self.buttons[i].themed(th).with_focus(i == self.focused);
+		Button b = self.buttons[i].themed(th).with_focus(i == self.focused).with_hover(i == self.hover);
 		xray::Node* btn = b.decorate(milktea::text({ .bg = th.panel }, b.view())
 			.width(milktea::cells(b.measure_width(2))));
-		btn.id_with(&self.button_slots[i]).on_click(&button_clicked);
+		btn.id_with(&self.button_slots[i]).on_click(&button_clicked)
+			.on_hover_in(&button_hover_in).on_hover_out(&button_hover_out);
 		buttons_row.add(btn);
 	}
 	panel_node.add(buttons_row);

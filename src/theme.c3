@@ -66,6 +66,10 @@ fn Theme default_theme() {
 
 const float PANEL_RADIUS = 8.0f;
 
+// PANEL_PAD_Y is the space above and below a panel's content in the GUI, in
+// points, where the terminal spends a whole row on the border.
+const sz PANEL_PAD_Y = 5;
+
 // pixel_ui reports whether the view is laid out in pixels, which is to say
 // running in the GUI, where decorations are drawn.
 fn bool pixel_ui() => milktea::layout_metrics().pixels;
@@ -76,9 +80,9 @@ fn bool pixel_ui() => milktea::layout_metrics().pixels;
 // where it would have, and the panel keeps its size.
 fn glaze::Style panel_style(glaze::Style s) {
 	if (!pixel_ui()) return s;
-	if (s.border.top.len > 0) s.pad_top++;
+	// Across, the cell stays so text keeps to the grid; top and bottom only
+	// need a few points, which floating() adds as decoration padding.
 	if (s.border.right.len > 0) s.pad_right++;
-	if (s.border.bottom.len > 0) s.pad_bottom++;
 	if (s.border.left.len > 0) s.pad_left++;
 	s.border = {};
 	return s;
@@ -94,7 +98,8 @@ fn xray::Node* floating(xray::Node* n, Theme* th, glaze::Color fill, glaze::Colo
 		.round(PANEL_RADIUS)
 		.with_border(1.0f, border)
 		.with_shadow(0.0f, 10.0f, 30.0f, dye::color_rgba(0, 0, 0, 140))
-		.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 22)));
+		.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 22))
+		.padding(PANEL_PAD_Y, 0, PANEL_PAD_Y, 0));
 }
 
 // ── Highlights ─────────────────────────────────────────────────────────────
