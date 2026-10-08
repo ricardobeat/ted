@@ -337,7 +337,10 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 		return null;
 	}
 
-	if (msg.kind == milktea::MsgKind.MOUSE) return self.handle_mouse_result();
+	if (msg.kind == milktea::MsgKind.MOUSE) {
+		if (self.wheel_scroll(msg.mouse)) return null;
+		return self.handle_mouse_result();
+	}
 	// A terminal hands over pasted text (Cmd+V on a Mac) as one message.
 	if (msg.kind == milktea::MsgKind.PASTE) {
 		if (self.focus == FOCUS_EDITOR && msg.paste.len > 0) {
@@ -587,6 +590,21 @@ fn milktea::Cmd Editor.handle_about_key(&self, milktea::KeyMsg k) {
 		default:
 	}
 	return null;
+}
+
+// Rows one notch of the wheel moves the editor, the usual terminal amount.
+const sz WHEEL_ROWS = 3;
+
+// wheel_scroll scrolls the document when the wheel turns over it, without
+// moving the caret, and reports whether it took the event. An open menu or
+// dialog sits over the editor, so the wheel is left alone while one is up.
+fn bool Editor.wheel_scroll(&self, milktea::MouseMsg m) {
+	bool up = m.button == milktea::MouseButton.MOUSE_WHEEL_UP;
+	if (!up && m.button != milktea::MouseButton.MOUSE_WHEEL_DOWN) return false;
+	if (self.menu.open || self.shortcuts.open || self.about.open || self.quit_confirm.open) return false;
+	if (!self.doc.rect.contains(m.col, m.row)) return false;
+	self.doc.scroll(up ? -WHEEL_ROWS : WHEEL_ROWS);
+	return true;
 }
 
 fn milktea::Cmd Editor.handle_mouse_result(&self) {
