@@ -134,5 +134,8 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 	}
 	panel_node.add(buttons_row);
 
-	return panel_node;
+	// A dialog is modal: everything behind it stops reacting to the pointer
+	// while it is up, rather than the sidebar still lighting up under hover.
+	// The layer covers the whole window and draws nothing.
+	return milktea::root().block_pointer().add(panel_node);
 }
