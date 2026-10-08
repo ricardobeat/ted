@@ -5,16 +5,9 @@ import glaze;
 import xray;
 import raylib6::rl;
 
-// The GUI window has no title bar of its own (see gui_main.c3), and it asks
-// the platform to take its close/minimise/zoom buttons away with it. What
-// stands in for them lives here: three round glyphs drawn in the top row of
-// the view, on the left where macOS puts them and on the right everywhere
-// else. They are ordinary cells with ordinary click handlers, so they follow
-// the app's font and theme rather than the platform's.
-const int LIGHT_CELLS = 2; // one glyph plus the gap after it
-const int CHROME_CELLS = 1 + LIGHT_CELLS * 3; // a cell of margin, then three
-
-const String LIGHT_GLYPH = "●";
+// Custom window controls use the macOS helper's 14-point fallback diameter.
+const int LIGHT_PITCH = 20;
+const int CHROME_CELLS = 7;
 
 fn void close_clicked(void* id, String id_str, int col, int row) @local {
 	// request_quit() asks the loop to stop, which tears raylib/GLFW down in
@@ -46,26 +39,30 @@ fn void zoom_clicked(void* id, String id_str, int col, int row) @local {
 	}
 }
 
-fn xray::Node* light(glaze::Color bg, glaze::Color fg, xray::ClickFn on) @local {
-	glaze::Style s = { .bg = bg, .fg = fg };
-	xray::Node* n = milktea::text(s, s.render(LIGHT_GLYPH))
-		.width(milktea::cells(LIGHT_CELLS));
-	n.on_click(on);
-	return n;
+fn xray::Node* light(glaze::Color fg, xray::ClickFn on) @local {
+	xray::Node* circle = milktea::vstack()
+		.width(xray::pixels(WINDOW_LIGHT_DIAMETER))
+		.height(xray::pixels(WINDOW_LIGHT_DIAMETER))
+		.center()
+		.decorate(xray::solid(milktea::to_cell_color(fg)).round((float)WINDOW_LIGHT_DIAMETER / 2.0f));
+	return milktea::zstack().width(xray::pixels(LIGHT_PITCH))
+		.on_click(on).add(circle);
 }
 
-// window_lights builds the button strip. It is CHROME_CELLS wide, which is
-// what Editor.chrome_cells reserves at whichever end of the bar the platform
-// would have used, so the menu titles and their dropdowns start clear of it.
+// Reserve whole text cells so menu titles and their dropdowns share an origin.
+// Each slot remains wide enough for a system-sized circle at small font sizes.
 fn xray::Node* window_lights(Theme* th, Editor* e) {
 	glaze::Style filler = { .bg = th.bar };
+	int cell_w = milktea::layout_metrics().unit_w();
+	int strip_cells = 1 + (LIGHT_PITCH * 3 + cell_w - 1) / cell_w;
+	e.chrome_cells = chrome_on_left() ? strip_cells : 0;
+	e.menu.x_inset = e.chrome_cells;
 	return milktea::hstack()
-		.height(milktea::cells(1))
-		.width(milktea::cells(CHROME_CELLS))
+		.width(milktea::cells(strip_cells))
 		.add(milktea::text(filler, "").width(milktea::cells(1)))
-		.add(light(th.bar, glaze::color_hex("#ff5f57"), &close_clicked).id_with(e))
-		.add(light(th.bar, glaze::color_hex("#febc2e"), &minimise_clicked))
-		.add(light(th.bar, glaze::color_hex("#28c840"), &zoom_clicked));
+		.add(light(glaze::color_hex("#ff5f57"), &close_clicked).id_with(e))
+		.add(light(glaze::color_hex("#febc2e"), &minimise_clicked))
+		.add(light(glaze::color_hex("#28c840"), &zoom_clicked));
 }
 
 // chrome_on_left reports which end of the bar the buttons take. macOS puts

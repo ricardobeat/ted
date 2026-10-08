@@ -170,7 +170,10 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 
 	self.title_press = false;
 
-	xray::Node* row = milktea::hstack().height(milktea::cells(1));
+	xray::Node* row = milktea::hstack()
+		.height(xray::pixels(top_bar_pixel_height() - BAR_PADDING_Y * 2, BAR_ROWS))
+		.decorate(xray::solid(milktea::to_cell_color(th.bar))
+			.padding(BAR_PADDING_Y, BAR_PADDING_X, BAR_PADDING_Y, BAR_PADDING_X));
 	if (lead) {
 		row.add(lead);
 	} else if (self.x_inset > 0) {
@@ -226,5 +229,10 @@ fn xray::Node* Menu.dropdown(&self, int below, Theme* th) {
 		row_node.id_with(&self.item_slots[i]).on_click(&item_clicked);
 		panel_node.add(row_node);
 	}
-	return panel_node;
+	// Dropdowns start below the padded bar and share its horizontal inset.
+	xray::Decoration inset;
+	return milktea::root()
+		.decorate(inset.padding(top_bar_pixel_height() - below * milktea::layout_metrics().unit_h(),
+			0, 0, BAR_PADDING_X))
+		.add(panel_node);
 }

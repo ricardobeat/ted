@@ -13,6 +13,15 @@ import std::os::env;
 
 const int BAR_ROWS = 1;
 const int STATUS_ROWS = 1;
+const int BAR_PADDING_Y = 4;
+const int BAR_PADDING_X = 8;
+const int WINDOW_LIGHT_DIAMETER = 14;
+
+fn int top_bar_pixel_height() {
+	int height = milktea::layout_metrics().unit_h();
+	if (height < WINDOW_LIGHT_DIAMETER) height = WINDOW_LIGHT_DIAMETER;
+	return height + BAR_PADDING_Y * 2;
+}
 const int STATUS_PAD = 2;
 
 // Focus model.
@@ -641,7 +650,11 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	String right_info = string::tformat("%s%s │ %s",
 		file_label, cursor_label, self.status_msg);
 
-	int editor_h = self.win_h - BAR_ROWS - STATUS_ROWS;
+	xray::LayoutMetrics metrics = milktea::layout_metrics();
+	int bar_extra = metrics.pixels
+		? top_bar_pixel_height() - BAR_ROWS * metrics.unit_h() + BAR_PADDING_Y * 2 : 0;
+	int editor_h = (milktea::layout_area().h - bar_extra) / metrics.unit_h()
+		- BAR_ROWS - STATUS_ROWS;
 	if (editor_h < 1) editor_h = 1;
 
 	// Every style the view draws with carries the editor background, so the
@@ -689,14 +702,14 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 
 	statusbar.decorate(xray::linear(
 		milktea::to_cell_color(th.status_bg),
-		milktea::to_cell_color(th.bar), 90.0f));
+		milktea::to_cell_color(th.bar), 90.0f).padding(BAR_PADDING_Y, BAR_PADDING_X, BAR_PADDING_Y, BAR_PADDING_X));
 
 	int sidebar_w = sidebar_panel_width(self);
 	xray::Rect editor_area = {
 		.x = sidebar_w,
 		.y = BAR_ROWS,
 		.w = self.win_w - sidebar_w,
-		.h = self.win_h - BAR_ROWS - STATUS_ROWS,
+		.h = editor_h,
 	};
 
 	// In the GUI the top row stands in for the title bar, so it carries the
