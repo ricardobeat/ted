@@ -90,6 +90,8 @@ struct Editor {
 	// Cells reserved at the left of the top bar for window buttons drawn by
 	// the platform (see gui_main.c3); zero in the terminal.
 	sz chrome_cells;
+	// The pointer is over the window buttons, which then show their glyphs.
+	bool lights_hover;
 	Focus focus;
 	// The path named on the command line, set by main() before the program
 	// starts. It may not exist yet: then the buffer starts empty under that
