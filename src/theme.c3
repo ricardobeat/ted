@@ -68,7 +68,7 @@ const float PANEL_RADIUS = 8.0f;
 
 // PANEL_PAD_Y is the space above and below a panel's content in the GUI, in
 // points, where the terminal spends a whole row on the border.
-const sz PANEL_PAD_Y = 5;
+const sz PANEL_PAD_Y = 9;
 
 // pixel_ui reports whether the view is laid out in pixels, which is to say
 // running in the GUI, where decorations are drawn.
