@@ -64,12 +64,31 @@ struct View (xray::Content) {
 	glaze::Style scrollbar_thumb_style;
 	milktea::CursorStyle caret;
 
+	// Wrapped-row index each line starts at, plus the total at the end, for
+	// the scrollbar. Laying out the whole document on every render to count
+	// rows was the most expensive part of drawing a frame, so it is rebuilt
+	// only when something rows depend on changes; row_key says what it was
+	// built for.
+	List{int} row_starts;
+	RowKey row_key;
+
 	// Fired when a press lands in the view, after it has moved the caret.
 	ViewPressFn on_press_fn;
 	void* on_press_ctx;
 }
 
 alias ViewPressFn = fn void(void* ctx);
+
+// RowKey is everything a line's wrapped row count depends on: the text, the
+// width and wrap settings, and the INLINE decorations, whose texts take up
+// cells. The layers are summarised by their item counts and text sizes.
+struct RowKey {
+	int version;
+	int width;
+	bool wrap;
+	int tab_width;
+	usz layers;
+}
 
 // NO_POS marks a glyph that stands for no byte of the buffer.
 const sz NO_POS = (sz)-1;
@@ -103,6 +122,8 @@ fn void View.init(&self) {
 	self.pairs.init(mem);
 	self.completion.init();
 	self.kill_buffer.init(mem);
+	self.row_starts.init(mem);
+	self.row_key.version = -1;
 	self.set_pairs(&DEFAULT_PAIRS);
 	self.text_width = 80;
 	self.height = 24;
@@ -121,6 +142,7 @@ fn void View.free(&self) {
 	self.pairs.free();
 	self.completion.free();
 	self.kill_buffer.free();
+	self.row_starts.free();
 }
 
 // set_text replaces the whole document, as opening a file does: the caret
@@ -348,30 +370,40 @@ fn int View.scrollbar_reserved(&self) => SCROLLBAR_W;
 // scope — layout_line's glyphs/rows lists live there and are released when
 // the caller exits.
 fn int View.total_rows(&self) {
+	self.update_row_starts();
+	return self.row_starts[self.row_starts.len() - 1];
+}
+
+// update_row_starts rebuilds row_starts when its key no longer matches.
+fn void View.update_row_starts(&self) @local {
+	usz layers = 0;
+	foreach (&l : self.layers) layers = layers * 31 + (usz)l.items.len() * 7919 + (usz)l.texts.len();
+	RowKey key = { self.buf.version, self.text_width, self.wrap, self.tab_width, layers };
+	if (self.row_starts.len() > 0 && key.version == self.row_key.version
+		&& key.width == self.row_key.width && key.wrap == self.row_key.wrap
+		&& key.tab_width == self.row_key.tab_width && key.layers == self.row_key.layers) return;
+	self.row_key = key;
+	self.row_starts.clear();
 	int total = 0;
 	int lines = self.buf.line_count();
-	int width = self.text_width;
-	for (int l = 0; l < lines; l++) {
-		LineLayout ll;
-		self.layout_line(l, width, &ll);
-		total += (int)ll.rows.len();
-	}
-	return total;
+	@pool() {
+		for (int l = 0; l < lines; l++) {
+			self.row_starts.push(total);
+			LineLayout ll;
+			self.layout_line(l, self.text_width, &ll);
+			total += (int)ll.rows.len();
+		}
+	};
+	self.row_starts.push(total);
 }
 
 // first_visible_row_index is the wrapped-row index of the top of the screen,
 // counting from the document's start. The thumb's row comes from this.
 fn int View.first_visible_row_index(&self) {
-	int idx = 0;
-	int lines = self.buf.line_count();
-	int width = self.text_width;
-	for (int l = 0; l < self.top_line && l < lines; l++) {
-		LineLayout ll;
-		self.layout_line(l, width, &ll);
-		idx += (int)ll.rows.len();
-	}
-	idx += self.top_row;
-	return idx;
+	self.update_row_starts();
+	int line = self.top_line;
+	if (line >= self.row_starts.len()) line = (int)self.row_starts.len() - 1;
+	return self.row_starts[line] + self.top_row;
 }
 
 // append_scrollbar writes the gap cell and the bar cell at the end of a row.
