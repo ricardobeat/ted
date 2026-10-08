@@ -3,6 +3,7 @@ module ted;
 import milktea;
 import glaze;
 import xray;
+import dye;
 
 const glaze::Border BUTTON_SHADOW = {
 	.right = "▌",
@@ -43,6 +44,9 @@ fn Button Button.with_focus(self, bool on) {
 }
 
 fn glaze::Style Button.style(&self) {
+	// The GUI draws the face and its shadow as a decoration (see node), so
+	// the label is all the text there is.
+	if (pixel_ui()) return { .fg = self.text, .pad_left = BUTTON_PAD, .pad_right = BUTTON_PAD };
 	return {
 		.fg = self.text,
 		.bg = self.focused ? self.focused_face : self.face,
@@ -56,12 +60,29 @@ fn glaze::Style Button.style(&self) {
 
 fn String Button.view(&self) => self.style().render(self.label);
 
-fn sz Button.measure(&self, sz width) @dynamic => 2;
+// In a terminal the shadow takes a row below and a column to the right.
+fn sz Button.measure(&self, sz width) @dynamic => pixel_ui() ? 1 : 2;
 
 fn sz Button.measure_width(&self, sz height) @dynamic {
-	return glaze::string_width(self.label) + BUTTON_PAD * 2 + 1;
+	return glaze::string_width(self.label) + BUTTON_PAD * 2 + (pixel_ui() ? 0 : 1);
 }
 
 fn String Button.render(&self, xray::Rect r) @dynamic => self.view();
 
-fn xray::Node* Button.node(&self) => xray::content_node(self);
+// BUTTON_PAD_Y is the extra height a GUI button gets above and below its
+// label, in points, so it is not just a coloured row of text.
+const sz BUTTON_PAD_Y = 3;
+
+fn xray::Node* Button.node(&self) => self.decorate(xray::content_node(self));
+
+// decorate gives a node showing this button's label its face in the GUI: a
+// rounded fill with a small soft shadow and a highlight along the top edge.
+// A terminal button carries its face and shadow in its own cells.
+fn xray::Node* Button.decorate(&self, xray::Node* n) {
+	if (!pixel_ui()) return n;
+	return n.decorate(xray::solid(self.focused ? self.focused_face : self.face)
+		.round(5.0f)
+		.with_shadow(0.0f, 1.0f, 3.0f, dye::color_rgba(0, 0, 0, 110))
+		.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 40))
+		.padding(BUTTON_PAD_Y, 0, BUTTON_PAD_Y, 0));
+}

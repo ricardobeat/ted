@@ -209,17 +209,16 @@ fn xray::Node* Menu.item_row(&self, MenuItem mi, glaze::Style base) {
 fn xray::Node* Menu.dropdown(&self, sz below, Theme* th) {
 	if (!self.open) return null;
 
-	glaze::Style panel = {
+	glaze::Style panel = panel_style({
 		.bg = th.bar, .fg = th.bar_text,
 		.border = glaze::NORMAL, .border_color = th.text,
 		.min_width = self.item_width,
-	};
+	});
 	glaze::Style selected = { .bg = th.ink, .fg = th.accent, .bold = true };
 	glaze::Style item = { .bg = th.bar, .fg = th.bar_text };
 
-	xray::Node* panel_node = milktea::vbox(panel)
-		.at(self.title_x[self.selected] + self.x_inset, below)
-		.shadow(milktea::shadow(2, 1).with_color(th.shadow));
+	xray::Node* panel_node = floating(milktea::vbox(panel)
+		.at(self.title_x[self.selected] + self.x_inset, below), th, th.bar, th.border);
 	panel_node.id_with(self).on_click_outside(&dropdown_dismissed);
 
 	for (sz i = 0; i < MENU_ITEMS; i++) {
