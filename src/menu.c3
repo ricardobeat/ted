@@ -72,6 +72,14 @@ fn void Menu.set_items(&self, sz col, MenuItem[MENU_ITEMS] items) {
 
 fn MenuItem Menu.current_item(&self) => self.items[self.selected][self.item];
 
+// item_count is how many items the open menu really has. Menus are fixed
+// arrays of MENU_ITEMS, and a shorter one leaves its last slots empty.
+fn sz Menu.item_count(&self) {
+	sz n = 0;
+	while (n < MENU_ITEMS && self.items[self.selected][n].label.len > 0) n++;
+	return n;
+}
+
 fn Chosen Menu.handle_key(&self, milktea::KeyMsg k) {
 	if (!self.open) return self.handle_bar_key(k);
 
@@ -82,7 +90,7 @@ fn Chosen Menu.handle_key(&self, milktea::KeyMsg k) {
 		case milktea::KeyCode.UP:
 			if (self.item > 0) self.item--;
 		case milktea::KeyCode.DOWN:
-			if (self.item < MENU_ITEMS - 1) self.item++;
+			if (self.item < self.item_count() - 1) self.item++;
 		case milktea::KeyCode.LEFT:
 			if (self.selected > 0) self.selected--;
 			self.item = 0;
@@ -250,7 +258,7 @@ fn xray::Node* Menu.dropdown(&self, sz below, Theme* th) {
 		.at(self.title_x[self.selected] + self.x_inset, below), th, th.bar, th.border);
 	panel_node.id_with(self).on_click_outside(&dropdown_dismissed);
 
-	for (sz i = 0; i < MENU_ITEMS; i++) {
+	for (sz i = 0; i < self.item_count(); i++) {
 		self.item_slots[i] = { .menu = self, .index = i };
 		bool hl = i == self.item;
 		xray::Node* row_node = self.item_row(self.items[self.selected][i], hl ? selected : item, hl);
