@@ -41,8 +41,10 @@ struct View (xray::Content) {
 	sz top_line;
 	sz top_row;
 	// The first display column on screen, when lines do not wrap and one
-	// can run past the right edge.
+	// can run past the right edge, and the part of a column a trackpad has
+	// moved the view across without reaching a whole one.
 	sz left_col;
+	float left_px;
 	// Blank rows above the first line while a trackpad pulls the view past
 	// the start (see scroller).
 	sz lead_blank;
@@ -585,6 +587,60 @@ fn void View.scroll_to_col(&self, sz col) {
 	if (self.left_col < 0) self.left_col = 0;
 }
 
+// line_width is how many columns a line takes on screen.
+fn sz View.line_width(&self, sz line) {
+	String text = self.buf.str();
+	sz end = self.buf.line_end(line);
+	sz col = 0;
+	for (sz pos = self.buf.line_start(line); pos < end; pos += glaze::utf8_sequence_len(text, pos)) {
+		col += text[pos] == '\t' ? self.tab_width - col % self.tab_width : glaze::utf8_width_at(text, pos);
+	}
+	return col;
+}
+
+// clamp_left_col keeps the view from being scrolled further across than the
+// widest line on screen needs, with a column to spare for a caret at its
+// end. A window made wider, or a view scrolled to shorter lines, comes back
+// towards the left edge by itself.
+fn void View.clamp_left_col(&self) {
+	if (self.wrap) {
+		self.left_col = 0;
+		return;
+	}
+	sz widest = 0;
+	sz last = self.top_line + self.height;
+	for (sz l = self.top_line; l < self.buf.line_count() && l <= last; l++) {
+		sz w = self.line_width(l);
+		if (w > widest) widest = w;
+	}
+	sz most = widest + 1 - self.text_width;
+	if (self.left_col > most) self.left_col = most;
+	if (self.left_col < 0) self.left_col = 0;
+}
+
+// scroll_cols moves the view across by columns without moving the caret.
+fn void View.scroll_cols(&self, sz cols) {
+	if (self.wrap) return;
+	self.left_col += cols;
+	self.clamp_left_col();
+}
+
+// scroll_msg_x moves the view across by what a window reports for a
+// sideways trackpad swipe, in pixels, positive towards the start of the
+// line as scroll_dy is towards the start of the document. Reports whether it
+// took the message.
+fn bool View.scroll_msg_x(&self, milktea::MouseMsg m) {
+	if (self.wrap || m.scroll_dx == 0) return false;
+	float unit = (float)milktea::layout_metrics().unit_w();
+	self.left_px -= m.scroll_dx;
+	sz cols = (sz)(self.left_px / unit);
+	if (cols != 0) {
+		self.left_px -= (float)cols * unit;
+		self.scroll_cols(cols);
+	}
+	return true;
+}
+
 // scroll moves the view by rows without moving the caret, as a wheel does.
 fn void View.scroll(&self, sz rows) {
 	self.lead_blank = 0;
@@ -809,23 +865,13 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 	// out text so a wrapped line never lands under it.
 	sz bar_reserved = self.scrollbar_reserved();
 	self.rect = r;
-	sz old_width = self.text_width;
 	self.text_width = r.w - gutter - bar_reserved;
 	// A smooth scroll part-way into a row asks for one row more than fits.
 	bool extra = milktea::layout_metrics().pixels && self.scroller.shift() > 0;
 	self.height = extra ? r.h - 1 : r.h;
 	if (self.text_width < 1) self.text_width = 1;
 	sz caret_line = self.buf.line_of(self.primary().head);
-	if (self.wrap) self.left_col = 0;
-	// Narrower or wider, an unwrapped view keeps the caret's column in sight.
-	if (!self.wrap && self.text_width != old_width) {
-		LineLayout cl;
-		self.layout_line(caret_line, self.text_width, &cl);
-		sz crow;
-		sz ccol;
-		cl.locate(self.primary().head, &crow, &ccol);
-		self.scroll_to_col(ccol);
-	}
+	self.clamp_left_col();
 	if (self.caret_kind != BLOCK && (self.text_width != self.caret_width || self.height != self.caret_height)) {
 		milktea::frames_until(milktea::frame_ms() + 50);
 	}

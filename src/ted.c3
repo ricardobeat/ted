@@ -655,6 +655,8 @@ fn milktea::Cmd Editor.handle_about_key(&self, milktea::KeyMsg k) {
 
 // Rows one notch of the wheel moves the editor, the usual terminal amount.
 const sz WHEEL_ROWS = 3;
+// Columns one notch of Shift+wheel moves an unwrapped view across.
+const sz WHEEL_COLS = 6;
 
 // wheel_scroll scrolls the document when the wheel turns over it, without
 // moving the caret, and reports whether it took the event. An open menu or
@@ -667,10 +669,18 @@ fn bool Editor.wheel_scroll(&self, milktea::MouseMsg m) {
 	bool phase = m.action == milktea::MouseAction.MOUSE_SCROLL_PHASE;
 	if (!wheel && !phase) return false;
 	if (self.command_bar.open || self.menu.open || self.shortcuts.open || self.about.open || self.quit_confirm.open) return false;
-	if (!phase && !self.doc.rect.contains(m.col, m.row)) return false;
+	bool over = self.doc.rect.contains(m.col, m.row);
+	if (!phase && !over) return false;
+	// Sideways, when lines don't wrap: a window's swipe by the pixel, a
+	// terminal's Shift+wheel by a few columns.
+	bool across = over && self.doc.scroll_msg_x(m);
+	if (wheel && m.shift && m.scroll_dx == 0 && m.scroll_dy == 0 && !self.doc.wrap) {
+		self.doc.scroll_cols(up ? -WHEEL_COLS : WHEEL_COLS);
+		return true;
+	}
 	// In a window: by the pixel, with momentum and rubber-banding.
 	if (self.doc.scroll_msg(m)) return true;
-	if (!wheel) return false;
+	if (!wheel) return across;
 	self.doc.scroll(up ? -WHEEL_ROWS : WHEEL_ROWS);
 	return true;
 }
