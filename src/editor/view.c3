@@ -900,12 +900,15 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 	// breathing room, then the bar itself. Reserve that space before laying
 	// out text so a wrapped line never lands under it.
 	sz bar_reserved = self.scrollbar_reserved();
-	self.rect = r;
 	// A smooth scroll part-way into a row asks for one row more than fits,
-	// and part-way into a column for one column more.
+	// and part-way into a column for one column more. rect is the view's
+	// own size without them, which the scrollbar and popups are placed by.
 	bool pixels = milktea::layout_metrics().pixels;
 	bool extra = pixels && self.scroller.shift() > 0;
 	sz extra_cols = pixels && !self.wrap && self.scroller.shift_x() > 0 ? 1 : 0;
+	self.rect = r;
+	self.rect.w -= extra_cols;
+	if (extra) self.rect.h--;
 	self.text_width = r.w - extra_cols - gutter - bar_reserved;
 	self.height = extra ? r.h - 1 : r.h;
 	if (self.text_width < 1) self.text_width = 1;
@@ -913,7 +916,7 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 	self.clamp_left_col();
 	bool caret_moved = self.caret_kind != BLOCK
 		&& (self.text_width != self.caret_width || self.height != self.caret_height);
-	bool bar_moved = pixels && (r.w != self.bar_width || r.h != self.bar_height);
+	bool bar_moved = pixels && (self.rect.w != self.bar_width || self.rect.h != self.bar_height);
 	if (caret_moved || bar_moved) milktea::frames_until(milktea::frame_ms() + 50);
 	ActiveGuide active = self.guides != NONE ? self.active_guide() : {};
 

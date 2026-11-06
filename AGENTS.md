@@ -33,6 +33,7 @@ Put the app in a state first with these, read at startup:
 | `TED_DIALOG=about\|shortcuts\|quit\|menu` | open that dialog, or the File menu |
 | `TED_FOCUS=menu\|files\|browser` | move keyboard focus there |
 | `TED_FONT_SIZE=<pt>` | text size |
+| `MILKTEA_CELLS=1` | lay out in cells with no window buttons: the terminal look, in colour |
 | a path argument | open that file, as a user would |
 
 ### Synthetic input
