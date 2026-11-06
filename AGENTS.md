@@ -1,10 +1,10 @@
 # Working on ted
 
-ted is a text editor built on milktea (`vendor/milktea`, a symlink to the
+ted is a text editor built on milktea (`lib/milktea`, a symlink to the
 milktea checkout). It builds two ways:
 
 - `c3c build ted` — the terminal app, `out/ted`.
-- `c3c build ted-gui` — the raylib window, `out/ted-gui`.
+- `c3c build ted-gui` — the GUI window (milktea's sokol GUI), `out/ted-gui`.
 
 Change milktea and ted together when an API moves; both repos are committed
 separately. Run milktea's tests with `c3c test` in the milktea checkout.
