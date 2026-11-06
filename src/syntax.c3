@@ -19,7 +19,7 @@ import std::os::env;
 // under any other.
 //
 // ink picks the language from the file name and loads its grammar and query
-// from vendor/ink.c3l the first time a file needs them. A file no grammar
+// from lib/ink.c3l the first time a file needs them. A file no grammar
 // claims, or a build run from somewhere ink.c3l can't be found, is shown
 // plain.
 
@@ -61,9 +61,9 @@ fn String[] ink_roots() @local {
 		}
 	}
 	String[] roots = mem::talloc_array(String, 3);
-	roots[0] = "vendor/ink.c3l";
-	roots[1] = string::tformat("%s/../vendor/ink.c3l", dir);
-	roots[2] = string::tformat("%s/vendor/ink.c3l", dir);
+	roots[0] = "lib/ink.c3l";
+	roots[1] = string::tformat("%s/../lib/ink.c3l", dir);
+	roots[2] = string::tformat("%s/lib/ink.c3l", dir);
 	return roots;
 }
 
