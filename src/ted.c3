@@ -62,6 +62,8 @@ struct Editor {
 	Dialog shortcuts;
 	Dialog about;
 	Dialog quit_confirm;
+	CommandBar command_bar;
+	FileSearch file_search;
 	boba::FilePicker browser;
 	editor::View doc;
 	Theme theme;
@@ -117,6 +119,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	self.menu.set_items(3, { {"Shortcuts", "?"}, {"About", ""}, {"", ""}, {"", ""} });
 
 	self.shortcuts = new_dialog("Keyboard Shortcuts",
+		"Ctrl+P   Search files\n"
 		"Esc      Leave menu/sidebar\n"
 		"Tab      menu → sidebar → browser\n"
 		"Ctrl+N   New file\n"
@@ -167,6 +170,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	if (self.open_arg.len > 0) self.open_path(self.open_arg);
 	String? dialog_opt = std::os::env::tget_var("TED_DIALOG");
 	if (try d = dialog_opt) {
+		if (d == "command") { self.show_file_search(); }
 		if (d == "shortcuts") { self.shortcuts.show(); }
 		else if (d == "about") { self.about.show(); }
 		else if (d == "quit") { self.quit_confirm.show(); }
@@ -331,6 +335,10 @@ fn void Editor.focus_editor(&self) {
 // ── Update ──────────────────────────────────────────────────────────────────
 
 fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
+	if (msg.kind == milktea::MsgKind.TICK && msg.owner == &self.file_search) {
+		self.poll_file_search();
+		return null;
+	}
 	if (msg.kind == milktea::MsgKind.WINDOW_SIZE) {
 		self.win_w = msg.window_size.width;
 		self.win_h = msg.window_size.height;
@@ -343,6 +351,7 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	}
 	// A terminal hands over pasted text (Cmd+V on a Mac) as one message.
 	if (msg.kind == milktea::MsgKind.PASTE) {
+		if (self.command_bar.open) { self.command_bar.paste(msg.paste); return null; }
 		if (self.focus == FOCUS_EDITOR && msg.paste.len > 0) {
 			self.doc.insert_text(msg.paste);
 			self.modified = true;
@@ -351,6 +360,8 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	}
 	if (msg.kind != milktea::MsgKind.KEY) return null;
 	milktea::KeyMsg k = msg.key;
+
+	if (self.command_bar.open) { self.command_bar.handle_key(k); return null; }
 
 	// Modal dialogs take precedence over the focus model.
 	if (self.shortcuts.open) return self.handle_shortcuts_key(k);
@@ -422,6 +433,7 @@ fn milktea::Cmd Editor.handle_ctrl_key(&self, milktea::KeyMsg k) {
 	switch (k.code) {
 		case milktea::KeyCode.RUNE:
 			switch (k.rune) {
+				case 'p': self.show_file_search();
 				case 'q': return self.quit();
 				case 's': self.save_file();
 				case 'n': self.new_file();
@@ -601,7 +613,7 @@ const sz WHEEL_ROWS = 3;
 fn bool Editor.wheel_scroll(&self, milktea::MouseMsg m) {
 	bool up = m.button == milktea::MouseButton.MOUSE_WHEEL_UP;
 	if (!up && m.button != milktea::MouseButton.MOUSE_WHEEL_DOWN) return false;
-	if (self.menu.open || self.shortcuts.open || self.about.open || self.quit_confirm.open) return false;
+	if (self.command_bar.open || self.menu.open || self.shortcuts.open || self.about.open || self.quit_confirm.open) return false;
 	if (!self.doc.rect.contains(m.col, m.row)) return false;
 	self.doc.scroll(up ? -WHEEL_ROWS : WHEEL_ROWS);
 	return true;
@@ -756,7 +768,8 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		.add(self.menu.dropdown(BAR_ROWS, th))
 		.add(self.shortcuts.node(th, editor_area))
 		.add(self.about.node(th, editor_area))
-		.add(self.quit_confirm.node(th, editor_area)))
+		.add(self.quit_confirm.node(th, editor_area))
+		.add(self.command_bar.node(th)))
 		.set_mouse_mode(milktea::MouseMode.MOUSE_MODE_ALL_MOTION);
 }
 
