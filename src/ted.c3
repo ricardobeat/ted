@@ -95,6 +95,9 @@ struct Editor {
 	// View ▸ Sidebar (Ctrl+B) puts the sidebar away; the editor takes its
 	// room, and focus skips it.
 	bool sidebar_hidden;
+	// How far the sidebar is shown, 0 to 1; it slides in and out as this
+	// runs toward !sidebar_hidden.
+	milktea::Tween sidebar_shown;
 	// The path named on the command line, set by main() before the program
 	// starts. It may not exist yet: then the buffer starts empty under that
 	// name and the file appears on the first save.
@@ -159,6 +162,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	// them through the same framework, so the same handlers fire in either
 	// build without a feature gate.
 	sidebar_init(self);
+	self.sidebar_shown = milktea::tween(1, SIDEBAR_SLIDE_MS);
 
 	// Layout-debug hooks for the snapshot harness (`./out/ted --render`).
 	String? focus_opt = std::os::env::tget_var("TED_FOCUS");
@@ -338,6 +342,7 @@ fn void Editor.cycle_focus(&self) {
 // keyboard hands the keyboard back to the editor.
 fn void Editor.toggle_sidebar(&self) {
 	self.sidebar_hidden = !self.sidebar_hidden;
+	self.sidebar_shown.update(self.sidebar_hidden ? 0 : 1);
 	if (self.sidebar_hidden && self.in_sidebar()) self.focus = FOCUS_EDITOR;
 	self.status_msg = self.sidebar_hidden ? "Sidebar hidden" : "Sidebar shown";
 }
@@ -346,6 +351,7 @@ fn void Editor.toggle_sidebar(&self) {
 // if it was put away.
 fn void Editor.open_browser(&self) {
 	self.sidebar_hidden = false;
+	self.sidebar_shown.update(1);
 	self.focus = FOCUS_SIDEBAR_BROWSER;
 }
 
@@ -782,15 +788,13 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 	self.browser.width = sidebar_content_width(self);
 	self.browser.height = editor_h;
 
-	xray::Node* editor_row = milktea::hstack().fill(1);
-	if (!self.sidebar_hidden) editor_row.add(sidebar_node(self));
-
 	// Editor area with 1-cell padding on every side, so the text and
 	// line-number gutter sit inside a margin rather than flush against the
 	// sidebar and the status bar.
-	editor_row.add(xray::vstack().style(glaze::style().background(th.editor_bg).pad(1))
+	xray::Node* editor_col = xray::vstack().style(glaze::style().background(th.editor_bg).pad(1))
 		.fill(1)
-		.add(self.doc.node().fill(1)));
+		.add(self.doc.node().fill(1));
+	xray::Node* editor_row = sidebar_row(self, editor_col);
 
 	xray::Node* status_row = milktea::hstack()
 		.height(milktea::cells(1))

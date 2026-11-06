@@ -11,6 +11,8 @@ import std::core::dstring;
 
 const sz SIDEBAR_WIDTH_MAX = 38; // widest the sidebar's content gets; the
                                   // border adds two more on top of this
+// How long the sidebar takes to slide in or out.
+const sz SIDEBAR_SLIDE_MS = 180;
 const sz SIDEBAR_WIDTH_MIN = 24; // narrowest the sidebar ever shrinks to
 const sz SIDEBAR_BORDER = 2; // one cell on each side for the panel border
 // Cells between the panel's border and the text in it. One is enough to keep
@@ -380,7 +382,11 @@ fn xray::Node* sidebar_panel(xray::Node* n, Theme* th) @local {
 // editor's background so the box sits on the same surface as the text.
 fn xray::Node* sidebar_frame(xray::Node* panel, sz width_cells, Theme* th) @local {
 	if (!pixel_ui()) return panel.width(milktea::cells(width_cells));
-	return milktea::vstack().width(milktea::cells(width_cells))
+	// A decorated node's padding adds to its size, so the inset comes out of
+	// the width to keep the frame a whole number of cells: the editor's text
+	// grid then starts on a cell, the same as with the sidebar hidden.
+	sz cell_w = milktea::layout_metrics().cell_w;
+	return milktea::vstack().width(xray::pixels(width_cells * cell_w - 2 * SIDEBAR_INSET))
 		.decorate(xray::solid(th.editor_bg)
 			.padding(SIDEBAR_INSET, SIDEBAR_INSET, SIDEBAR_INSET, SIDEBAR_INSET))
 		.add(panel.fill(1));
@@ -395,9 +401,30 @@ fn xray::Node* sidebar_node(Editor* ed) => sidebar_tree(ed);
 
 // sidebar_panel_width reports the total cells the sidebar occupies including
 // its border, so dialogs and the editor column can sit cleanly to its right.
+// While the sidebar slides in or out it is the part on screen.
 fn sz sidebar_panel_width(Editor* ed) {
-	if (ed.sidebar_hidden) return 0;
-	return sidebar_content_width(ed) + SIDEBAR_BORDER;
+	if (!ed.sidebar_shown.showing()) return 0;
+	return ed.sidebar_shown.lerp(0, sidebar_full_width(ed));
+}
+
+fn sz sidebar_full_width(Editor* ed) @local => sidebar_content_width(ed) + SIDEBAR_BORDER;
+
+// sidebar_row lays the sidebar beside the editor column. While it slides,
+// the editor sits past a strip as wide as the part of the sidebar shown,
+// and the whole panel lies over that strip, pushed left past the window's
+// edge: the panel moves in and out instead of squeezing and rewrapping its
+// names, which a column narrower than the panel would make it do.
+fn xray::Node* sidebar_row(Editor* ed, xray::Node* editor_col) {
+	xray::Node* row = milktea::hstack().fill(1);
+	if (!ed.sidebar_shown.showing()) return row.add(editor_col);
+	sz full = sidebar_full_width(ed);
+	sz shown = sidebar_panel_width(ed);
+	if (shown >= full) return row.add(sidebar_node(ed)).add(editor_col);
+	row.add(milktea::vstack().width(milktea::cells(shown)).style(glaze::style().background(ed.theme.editor_bg)))
+		.add(editor_col);
+	return xray::zstack().fill(1)
+		.add(row)
+		.add(sidebar_node(ed).offset(shown - full, 0));
 }
 
 // sidebar_init wires the click handlers every interactive node needs. Called
