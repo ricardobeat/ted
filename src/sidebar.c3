@@ -273,7 +273,8 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 	// The picker's tree_node() reserves 4 rows for title + hint + padding;
 	// the sidebar's header here replaces the title, so visible rows are the
 	// height minus 1 (hint) minus padding rows when the directory is short.
-	sz visible = ed.browser.height - 4;
+	// The GUI drops the hint, and the list takes its row.
+	sz visible = ed.browser.height - (pixel_ui() ? 3 : 4);
 	if (visible < 1) visible = 1;
 	// Reconcile scroll with cursor: picker's own tree_node() does the same.
 	if (ed.browser.cursor < ed.browser.scroll) ed.browser.scroll = ed.browser.cursor;
@@ -312,6 +313,7 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 	for (sz i = 0; i < pad; i++) {
 		v.add(sidebar_text(*bg, ""));
 	}
+	if (pixel_ui()) return;
 	glaze::Style hint_style = { .fg = th.dim, .bg = th.browser_bg };
 	v.add(sidebar_text(hint_style, "Enter: open  Backspace: parent"));
 }

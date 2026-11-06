@@ -669,7 +669,8 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 		case FOCUS_EDITOR:
 		default:                    mode_hint = "";
 	}
-	String hint_label = string::tformat(
+	// The GUI has menus for all of this, so it shows only the mode.
+	String hint_label = pixel_ui() ? string::tformat("  %s", mode_hint) : string::tformat(
 		"  %s  %s focus  %s cycle  %s sidebar  %s shortcuts  %s quit ",
 		mode_hint,
 		key_style.render("Esc"),

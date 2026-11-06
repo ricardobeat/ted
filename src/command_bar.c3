@@ -174,7 +174,7 @@ fn xray::Node* CommandBar.node(&self, Theme* th) {
 
 	panel.add(milktea::text("", plain).width(full).height(milktea::cells(1)));
 	xray::Node* footer = xray::hstack().width(full).height(milktea::cells(1));
-	String left = self.hint.len ? self.hint : "↑↓ select · Enter open · Esc close";
+	String left = self.hint.len || pixel_ui() ? self.hint : "↑↓ select · Enter open · Esc close";
 	footer.add(milktea::text(string::tformat("  %s", left), dim).width(full));
 	if (self.results.len) {
 		String count = string::tformat("%d %s  ", self.results.len, self.results.len == 1 ? "match" : "matches");
