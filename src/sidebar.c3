@@ -209,7 +209,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 		.border = glaze::NORMAL, .border_color = th.border,
 		.border_bg = th.browser_bg,
 	});
-	xray::Node* v = sidebar_panel(milktea::vbox(panel), th);
+	xray::Node* v = sidebar_panel(xray::vstack().style(panel), th);
 
 	// "Open" header
 	v.add(sidebar_header(th, "Open", "", content_w, false));
@@ -320,7 +320,7 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 // text, background and all. In the GUI the panel's gradient shows through a
 // plain row, and a lit one (hovered or selected) is a rounded highlight.
 fn xray::Node* sidebar_text(glaze::Style s, String text, bool lit = false) @local {
-	xray::Node* n = milktea::text(highlight_style(s), text).height(milktea::cells(1));
+	xray::Node* n = milktea::text(text, highlight_style(s)).height(milktea::cells(1));
 	if (!pixel_ui()) return n;
 	return lit ? highlight(n, s.bg) : clear_bg(n);
 }
@@ -390,7 +390,7 @@ fn void sidebar_init(Editor* ed) {
 // a section that follows another.
 fn xray::Node* sidebar_header(Theme* th, String label, String detail, sz content_w, bool spaced) @local {
 	if (!pixel_ui()) {
-		return milktea::text({ .bg = th.browser_bg }, section_header(th, label, detail, content_w))
+		return milktea::text(section_header(th, label, detail, content_w), { .bg = th.browser_bg })
 			.height(milktea::cells(1));
 	}
 	glaze::Style title = { .fg = th.dim, .bold = true };
@@ -398,7 +398,7 @@ fn xray::Node* sidebar_header(Theme* th, String label, String detail, sz content
 	DString out = dstring::temp();
 	out.append_string(title.render(string::tformat("%s%s", SIDEBAR_PAD, label.to_upper_tcopy())));
 	if (detail.len > 0) out.append_string(faint.render(string::tformat("  %s", detail)));
-	return milktea::text({}, out.str_view()).height(milktea::cells(1))
+	return milktea::text(out.str_view()).height(milktea::cells(1))
 		.decorate(xray::solid(xray::color_transparent()).padding(spaced ? 4 : 0, 0, 2, 0));
 }
 

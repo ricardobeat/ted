@@ -201,19 +201,19 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 	if (lead) {
 		row.add(lead);
 	} else if (self.x_inset > 0) {
-		row.add(milktea::text(filler, "").width(milktea::cells(self.x_inset)));
+		row.add(milktea::text("", filler).width(milktea::cells(self.x_inset)));
 	}
 	for (sz i = 0; i < MENU_COLS; i++) {
 		self.title_slots[i] = { .menu = self, .index = i };
 		bool highlighted = (focused || self.open) && i == self.selected;
 		xray::Node* title_node = highlighted
-			? highlight(milktea::text(highlight_style(active), self.titles[i]), active.bg)
-			: milktea::text(bar, self.titles[i]);
+			? highlight(milktea::text(self.titles[i], highlight_style(active)), active.bg)
+			: milktea::text(self.titles[i], bar);
 		title_node.fit_width().id_with(&self.title_slots[i])
 			.on_click(&title_clicked).on_hover_in(&title_hovered);
 		row.add(title_node);
 	}
-	row.add(milktea::text(filler, "").fill(1).window_drag(true));
+	row.add(milktea::text("", filler).fill(1).window_drag(true));
 	if (trail) row.add(trail);
 	return row;
 }
@@ -223,22 +223,22 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 // least ITEM_GAP between them when the panel is sized to its widest row.
 fn xray::Node* Menu.item_row(&self, MenuItem mi, glaze::Style base, bool highlighted) {
 	if (!highlighted || !pixel_ui()) {
-		return milktea::hbox(base.pad_x(ITEM_PAD))
+		return xray::hstack().style(base.pad_x(ITEM_PAD))
 			.with_justify(xray::JustifyContent.JUSTIFY_SPACE_BETWEEN)
 			.with_gap(ITEM_GAP)
 			.fit_height()
-			.add(milktea::text(base, mi.label).fit_width())
-			.add(milktea::text(base, mi.key).fit_width());
+			.add(milktea::text(mi.label, base).fit_width())
+			.add(milktea::text(mi.key, base).fit_width());
 	}
 	// In the GUI the highlight is a rounded fill under the whole row, so the
 	// label and key are drawn on it with clear backgrounds.
 	glaze::Style clear = highlight_style(base);
-	return highlight(milktea::hbox(clear.pad_x(ITEM_PAD)), base.bg)
+	return highlight(xray::hstack().style(clear.pad_x(ITEM_PAD)), base.bg)
 		.with_justify(xray::JustifyContent.JUSTIFY_SPACE_BETWEEN)
 		.with_gap(ITEM_GAP)
 		.fit_height()
-		.add(clear_bg(milktea::text(clear, mi.label).fit_width()))
-		.add(clear_bg(milktea::text(clear, mi.key).fit_width()));
+		.add(clear_bg(milktea::text(mi.label, clear).fit_width()))
+		.add(clear_bg(milktea::text(mi.key, clear).fit_width()));
 }
 
 // dropdown is a bordered box of item rows, as wide as its widest row but no
@@ -254,7 +254,7 @@ fn xray::Node* Menu.dropdown(&self, sz below, Theme* th) {
 	glaze::Style selected = { .bg = th.ink, .fg = th.accent, .bold = true };
 	glaze::Style item = { .bg = th.bar, .fg = th.bar_text };
 
-	xray::Node* panel_node = floating(milktea::vbox(panel)
+	xray::Node* panel_node = floating(xray::vstack().style(panel)
 		.at(self.title_x[self.selected] + self.x_inset, below), th, th.bar, th.border);
 	panel_node.id_with(self).on_click_outside(&dropdown_dismissed);
 

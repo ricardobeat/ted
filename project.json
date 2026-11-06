@@ -39,24 +39,24 @@
         "src/ted.c3",
         "src/chrome.c3",
         "src/gui_main.c3",
-        "vendor/milktea/milktea-gui/**"
+        "lib/milktea/milktea-gui/**"
       ],
       "c-sources": [
-        "vendor/milktea/milktea-gui/macos_window.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-blend.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-canvas.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-font.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-ft-math.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-ft-raster.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-ft-stroker.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-matrix.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-paint.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-path.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-rasterize.c",
-        "vendor/milktea/vendor/plutovg/src/plutovg-surface.c"
+        "lib/milktea/milktea-gui/macos_window.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-blend.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-canvas.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-font.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-ft-math.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-ft-raster.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-ft-stroker.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-matrix.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-paint.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-path.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-rasterize.c",
+        "lib/milktea/vendor/plutovg/src/plutovg-surface.c"
       ],
       "c-include-dirs": [
-        "vendor/milktea/vendor/plutovg/include"
+        "lib/milktea/vendor/plutovg/include"
       ],
       "cflags": "-DPLUTOVG_DISABLE_IMAGE_WRITE",
       "features": [
@@ -70,9 +70,8 @@
     }
   },
   "dependency-search-paths": [
-    "vendor",
-    "vendor/milktea",
-    "vendor/milktea/lib"
+    "lib/milktea/lib",
+    "lib"
   ],
   "dependencies": [
     "ink",

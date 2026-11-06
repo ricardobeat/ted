@@ -110,12 +110,12 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 	glaze::Style title_s = { .fg = th.accent, .bg = th.panel, .bold = true };
 	glaze::Style body_s = { .fg = th.text, .bg = th.panel };
 
-	xray::Node* panel_node = floating(milktea::vbox(panel).with_gap(1).center(),
+	xray::Node* panel_node = floating(xray::vstack().style(panel).with_gap(1).center(),
 		th, th.panel, th.border);
 	panel_node.id_with(self).on_click_outside(&backdrop_dismissed);
 
-	panel_node.add(milktea::text(title_s, self.title).fit_height());
-	panel_node.add(milktea::text(body_s, self.body).fit_height());
+	panel_node.add(milktea::text(self.title, title_s).fit_height());
+	panel_node.add(milktea::text(self.body, body_s).fit_height());
 
 	xray::Node* buttons_row = xray::hstack()
 		.with_gap(2)
@@ -126,7 +126,7 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 	for (sz i = 0; i < DIALOG_BUTTONS; i++) {
 		self.button_slots[i] = { .dialog = self, .index = i };
 		Button b = self.buttons[i].themed(th).with_focus(i == self.focused).with_hover(i == self.hover);
-		xray::Node* btn = b.decorate(milktea::text({ .bg = th.panel }, b.view())
+		xray::Node* btn = b.decorate(milktea::text(b.view(), { .bg = th.panel })
 			.width(milktea::cells(b.measure_width(2))));
 		btn.id_with(&self.button_slots[i]).on_click(&button_clicked)
 			.on_hover_in(&button_hover_in).on_hover_out(&button_hover_out);

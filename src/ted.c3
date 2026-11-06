@@ -644,7 +644,7 @@ fn milktea::Cmd Editor.handle_mouse_result(&self) {
 
 // ── View ───────────────────────────────────────────────────────────────────
 
-fn milktea::View Editor.view(Editor* self) @dynamic {
+fn xray::Node* Editor.view(Editor* self) @dynamic {
 	Theme* th = &self.theme;
 
 	glaze::Style status_style = { .bg = th.status_bg, .fg = th.status_fg };
@@ -717,18 +717,18 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 	// Editor area with 1-cell padding on every side, so the text and
 	// line-number gutter sit inside a margin rather than flush against the
 	// sidebar and the status bar.
-	editor_row.add(milktea::vbox(glaze::style().background(th.editor_bg).pad(1))
+	editor_row.add(xray::vstack().style(glaze::style().background(th.editor_bg).pad(1))
 		.fill(1)
 		.add(self.doc.node().fill(1)));
 
 	xray::Node* status_row = milktea::hstack()
 		.height(milktea::cells(1))
-		.add(milktea::text(status_style, hint_label).fill(1))
-		.add(milktea::text(status_style, right_info).fit_width());
+		.add(milktea::text(hint_label, status_style).fill(1))
+		.add(milktea::text(right_info, status_style).fit_width());
 
 	// The padding is the bar's own, so the whole strip reads as one bar out
 	// to the ends the row of hints does not reach.
-	xray::Node* statusbar = milktea::vbox(status_style.pad_x(STATUS_PAD))
+	xray::Node* statusbar = xray::vstack().style(status_style.pad_x(STATUS_PAD))
 		.height(milktea::cells(STATUS_ROWS))
 		.add(status_row);
 
@@ -757,7 +757,8 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		}
 	$endif
 
-	return milktea::draw(milktea::root()
+	milktea::set_mouse_mode(milktea::MouseMode.MOUSE_MODE_ALL_MOTION);
+	return milktea::root()
 		.add(milktea::vstack()
 			.add(self.menu.bar(th, self.focus == FOCUS_MENU_BAR, lead, trail))
 			.add(editor_row)
@@ -769,8 +770,7 @@ fn milktea::View Editor.view(Editor* self) @dynamic {
 		.add(self.shortcuts.node(th, editor_area))
 		.add(self.about.node(th, editor_area))
 		.add(self.quit_confirm.node(th, editor_area))
-		.add(self.command_bar.node(th)))
-		.set_mouse_mode(milktea::MouseMode.MOUSE_MODE_ALL_MOTION);
+		.add(self.command_bar.node(th));
 }
 
 // The GUI build (ted-gui) supplies its own main() in gui_main.c3.

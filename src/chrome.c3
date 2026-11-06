@@ -85,7 +85,7 @@ fn xray::Node* light(Light l, bool hovered) @local {
 		// clear background; an invisible one is enough to get that, so the
 		// circle shows around the glyph instead of a black cell.
 		glaze::Style g = { .fg = glaze::color_hex(l.glyph_fill), .bold = true };
-		slot.add(milktea::text(g, l.glyph).width(milktea::cells(1)).height(milktea::cells(1)).center()
+		slot.add(milktea::text(l.glyph, g).width(milktea::cells(1)).height(milktea::cells(1)).center()
 			.decorate(xray::solid(xray::color_transparent())));
 	}
 	return slot;

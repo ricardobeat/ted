@@ -190,7 +190,7 @@ fn xray::Node* View.completion_node(&self, glaze::Style item_style, glaze::Style
 		.at(x, y);
 	foreach (i, item : c.items) {
 		glaze::Style s = i == c.selected ? selected_style : item_style;
-		list.add(milktea::text(s.pad_x(1), item).height(milktea::cells(1)));
+		list.add(milktea::text(item, s.pad_x(1)).height(milktea::cells(1)));
 	}
 	return list;
 }
