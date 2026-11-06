@@ -3,6 +3,7 @@ module ted::editor;
 import glaze;
 import xray;
 import milktea;
+import boba;
 import std::collections::list;
 
 // View is the editor component: a buffer, the selections in it, the
@@ -19,14 +20,14 @@ import std::collections::list;
 struct View (xray::Content) {
 	Buffer buf;
 	// The selections, primary first. There is always at least one.
-	List{Selection} sels;
-	List{Layer} layers;
+	list::List{Selection} sels;
+	list::List{Layer} layers;
 	History history;
 	// Language knowledge, when there is some: see Assist.
 	Assist assist;
 	// Brackets and quotes that pair up as they are typed, openers and
 	// closers alternating.
-	List{String} pairs;
+	list::List{String} pairs;
 	Completion completion;
 	// What the current run of Ctrl+K presses has cut, and whether the last
 	// key was one of them.
@@ -39,6 +40,14 @@ struct View (xray::Content) {
 	// rows are above the top.
 	sz top_line;
 	sz top_row;
+	// Blank rows above the first line while a trackpad pulls the view past
+	// the start (see scroller).
+	sz lead_blank;
+	// Smooth scrolling in a window: a pixel position over the wrapped rows,
+	// kept in step with top_line/top_row. no_rubber_band keeps the view from
+	// being pulled past either end.
+	boba::Scroller scroller;
+	bool no_rubber_band;
 	// The text area's size at the last render, in cells, for commands that
 	// move by a screenful.
 	sz text_width;
@@ -69,7 +78,7 @@ struct View (xray::Content) {
 	// rows was the most expensive part of drawing a frame, so it is rebuilt
 	// only when something rows depend on changes; row_key says what it was
 	// built for.
-	List{sz} row_starts;
+	list::List{sz} row_starts;
 	RowKey row_key;
 
 	// Fired when a press lands in the view, after it has moved the caret.
@@ -109,8 +118,8 @@ struct Row {
 
 struct LineLayout {
 	sz line;
-	List{Glyph} glyphs;
-	List{Row} rows;
+	list::List{Glyph} glyphs;
+	list::List{Row} rows;
 }
 
 fn void View.init(&self) {
@@ -436,9 +445,48 @@ fn sz View.rows_in(&self, sz line) {
 	return (sz)ll.rows.len();
 }
 
+// set_top_row puts the view's top at wrapped row g of the document; a g
+// before the start leaves that many blank rows above the first line.
+fn void View.set_top_row(&self, sz g) {
+	self.update_row_starts();
+	self.lead_blank = g < 0 ? -g : 0;
+	if (g < 0) g = 0;
+	sz total = self.row_starts[self.row_starts.len() - 1];
+	if (total > 0 && g > total - 1) g = total - 1;
+	// The last line whose first row is at or before g.
+	sz lo = 0;
+	sz hi = (sz)self.buf.line_count() - 1;
+	while (lo < hi) {
+		sz mid = (lo + hi + 1) / 2;
+		if (self.row_starts[mid] <= g) { lo = mid; } else { hi = mid - 1; }
+	}
+	self.top_line = lo;
+	self.top_row = g - self.row_starts[lo];
+}
+
+// scroll_state brings the scroller up to date with the document and with
+// top_line/top_row, which keys and caret tracking move by rows.
+fn boba::Scroller* View.scroll_state(&self) {
+	self.scroller.rubber_band = !self.no_rubber_band;
+	self.scroller.set_content(self.total_rows(), self.height);
+	self.scroller.sync_row(self.lead_blank > 0 ? -self.lead_blank : self.first_visible_row_index());
+	return &self.scroller;
+}
+
+// scroll_msg scrolls by what a window reports for a wheel or trackpad (see
+// boba::Scroller.handle), and reports whether it did; a terminal's wheel is
+// left to scroll().
+fn bool View.scroll_msg(&self, milktea::MouseMsg m) {
+	boba::Scroller* sc = self.scroll_state();
+	if (!sc.handle(m)) return false;
+	self.set_top_row(sc.top_row());
+	return true;
+}
+
 // scroll_to_caret moves the view the least that brings the primary caret on
 // screen.
 fn void View.scroll_to_caret(&self) {
+	self.lead_blank = 0;
 	@pool() {
 		sz head = self.primary().head;
 		sz line = self.buf.line_of(head);
@@ -481,6 +529,7 @@ fn void View.scroll_to_caret(&self) {
 
 // scroll moves the view by rows without moving the caret, as a wheel does.
 fn void View.scroll(&self, sz rows) {
+	self.lead_blank = 0;
 	@pool() {
 		while (rows > 0) {
 			sz left = self.rows_in(self.top_line) - self.top_row;
@@ -526,7 +575,9 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 	sz bar_reserved = self.scrollbar_reserved();
 	self.rect = r;
 	self.text_width = r.w - gutter - bar_reserved;
-	self.height = r.h;
+	// A smooth scroll part-way into a row asks for one row more than fits.
+	bool extra = milktea::layout_metrics().pixels && self.scroller.shift() > 0;
+	self.height = extra ? r.h - 1 : r.h;
 	if (self.text_width < 1) self.text_width = 1;
 	sz caret_line = self.buf.line_of(self.primary().head);
 
@@ -553,6 +604,12 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 
 	DString out = dstring::temp();
 	sz drawn = 0;
+	// Rows before the start, while a trackpad pulls the view past it.
+	for (; drawn < self.lead_blank && drawn < r.h; drawn++) {
+		if (drawn > 0) out.append_char('\n');
+		out.append_string(self.text_style.render(spaces(r.w - bar_reserved)));
+		self.append_scrollbar(&out, drawn, bar_reserved, thumb_row);
+	}
 	for (sz line = self.top_line; line < self.buf.line_count() && drawn < r.h; line++) {
 		LineLayout ll;
 		self.layout_line(line, self.text_width, &ll);
@@ -633,12 +690,14 @@ fn xray::ContentCursor View.cursor(&self, xray::Rect r) @dynamic {
 	sz lrow;
 	sz col;
 	ll.locate(head, &lrow, &col);
-	row += lrow - (line == self.top_line ? self.top_row : 0);
+	row += lrow - (line == self.top_line ? self.top_row : 0) + self.lead_blank;
 	return xray::place_cursor(r, self.gutter_width() + col, row, self.caret);
 }
 
 // pos_at_cell is the buffer position under a cell of the view.
 fn sz View.pos_at_cell(&self, sz col, sz row) {
+	row -= self.lead_blank;
+	if (row < 0) row = 0;
 	col -= self.gutter_width();
 	if (col < 0) col = 0;
 	sz line = self.top_line;
@@ -656,7 +715,13 @@ fn sz View.pos_at_cell(&self, sz col, sz row) {
 }
 
 fn xray::Node* View.node(&self) {
-	return xray::content_node(self).id_with(self).on_click(&view_pressed);
+	xray::Node* n = xray::content_node(self).id_with(self).on_click(&view_pressed);
+	boba::Scroller* sc = self.scroll_state();
+	sc.apply(n);
+	if (sc.springing || self.lead_blank > 0 || sc.top_row() != self.first_visible_row_index()) {
+		self.set_top_row(sc.top_row());
+	}
+	return n;
 }
 
 fn void View.on_press(&self, ViewPressFn f, void* ctx) {

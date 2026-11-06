@@ -612,9 +612,16 @@ const sz WHEEL_ROWS = 3;
 // dialog sits over the editor, so the wheel is left alone while one is up.
 fn bool Editor.wheel_scroll(&self, milktea::MouseMsg m) {
 	bool up = m.button == milktea::MouseButton.MOUSE_WHEEL_UP;
-	if (!up && m.button != milktea::MouseButton.MOUSE_WHEEL_DOWN) return false;
+	bool wheel = up || m.button == milktea::MouseButton.MOUSE_WHEEL_DOWN;
+	// A trackpad gesture can end (fingers lifted) without moving, which is
+	// when a view pulled past an end springs back.
+	bool phase = m.action == milktea::MouseAction.MOUSE_SCROLL_PHASE;
+	if (!wheel && !phase) return false;
 	if (self.command_bar.open || self.menu.open || self.shortcuts.open || self.about.open || self.quit_confirm.open) return false;
-	if (!self.doc.rect.contains(m.col, m.row)) return false;
+	if (!phase && !self.doc.rect.contains(m.col, m.row)) return false;
+	// In a window: by the pixel, with momentum and rubber-banding.
+	if (self.doc.scroll_msg(m)) return true;
+	if (!wheel) return false;
 	self.doc.scroll(up ? -WHEEL_ROWS : WHEEL_ROWS);
 	return true;
 }
