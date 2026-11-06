@@ -85,7 +85,7 @@ fn Settings load_settings() @local {
 	return s;
 }
 
-fn void Settings.read_file(&self, String path) @local {
+fn void Settings.read_file(&self, String path) {
 	char[]? data = file::load_temp(path);
 	if (catch data) {
 		self.problem = string::format(mem, "Settings: could not read %s", path);
@@ -105,7 +105,7 @@ fn void Settings.read_file(&self, String path) @local {
 
 // read takes the values the file sets, each checked; the first bad one is
 // the problem reported, and keeps its default.
-fn void Settings.read(&self, Object* root) @local {
+fn void Settings.read(&self, Object* root) {
 	if (root.has_key("caret")) {
 		String? v = root.get_string("caret");
 		if (try v) {
@@ -158,7 +158,7 @@ fn void Settings.read(&self, Object* root) @local {
 	}
 }
 
-fn void Settings.bad(&self, String key, String want) @local {
+fn void Settings.bad(&self, String key, String want) {
 	if (self.problem.len) return;
 	self.problem = string::format(mem, "Settings: %s should be %s", key, want);
 }
