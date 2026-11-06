@@ -757,7 +757,14 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 		}
 	$endif
 
-	milktea::set_mouse_mode(milktea::MouseMode.MOUSE_MODE_ALL_MOTION);
+	// A terminal reports the pointer only in all-motion mode, which hover
+	// needs. A window tracks hover itself, so the model only asks for moves
+	// with the button held, and the rest redraw nothing.
+	$if $feat(MILKTEA_GUI):
+		milktea::set_mouse_mode(milktea::MouseMode.MOUSE_MODE_CELL_MOTION);
+	$else
+		milktea::set_mouse_mode(milktea::MouseMode.MOUSE_MODE_ALL_MOTION);
+	$endif
 	return milktea::root()
 		.add(milktea::vstack()
 			.add(self.menu.bar(th, self.focus == FOCUS_MENU_BAR, lead, trail))

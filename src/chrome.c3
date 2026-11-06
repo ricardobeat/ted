@@ -3,20 +3,17 @@ module ted;
 import milktea;
 import glaze;
 import xray;
-import raylib6::rl;
+import milktea_gui;
 
 // Custom window controls use the macOS helper's 14-point fallback diameter.
 const sz LIGHT_PITCH = 20;
 const sz CHROME_CELLS = 7;
 
 fn void close_clicked(void* id, String id_str, sz col, sz row) @local {
-	// request_quit() asks the loop to stop, which tears raylib/GLFW down in
-	// the right order. A click handler returns void, so the Cmd quit()
-	// builds has nowhere to go — request_quit() is the same request through
-	// the message queue, which every backend drains each frame. Calling
-	// rl::close_window() here would yank GLFW out from under milktea
-	// mid-frame and leave it logging "GLFW library is not initialized" on
-	// every later raylib call.
+	// request_quit() asks the loop to stop, so the window goes away in the
+	// right order. A click handler returns void, so the Cmd quit() builds
+	// has nowhere to go — request_quit() is the same request through the
+	// message queue, which every backend drains each frame.
 	// With unsaved changes the editor asks first, the same as Ctrl+Q.
 	Editor* e = (Editor*)id;
 	if (e && e.modified) {
@@ -28,15 +25,11 @@ fn void close_clicked(void* id, String id_str, sz col, sz row) @local {
 }
 
 fn void minimise_clicked(void* id, String id_str, sz col, sz row) @local {
-	rl::minimize_window();
+	milktea_gui::minimize_window();
 }
 
 fn void zoom_clicked(void* id, String id_str, sz col, sz row) @local {
-	if (rl::is_window_maximized()) {
-		rl::restore_window();
-	} else {
-		rl::maximize_window();
-	}
+	milktea_gui::toggle_zoom();
 }
 
 // AppKit's own geometry: the first button sits 12pt in from the window's

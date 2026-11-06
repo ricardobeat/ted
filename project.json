@@ -38,35 +38,17 @@
         "src/syntax.c3",
         "src/ted.c3",
         "src/chrome.c3",
-        "src/gui_main.c3",
-        "lib/milktea/milktea-gui/**"
+        "src/gui_main.c3"
       ],
-      "c-sources": [
-        "lib/milktea/milktea-gui/macos_window.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-blend.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-canvas.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-font.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-ft-math.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-ft-raster.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-ft-stroker.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-matrix.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-paint.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-path.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-rasterize.c",
-        "lib/milktea/vendor/plutovg/src/plutovg-surface.c"
-      ],
-      "c-include-dirs": [
-        "lib/milktea/vendor/plutovg/include"
-      ],
-      "cflags": "-DPLUTOVG_DISABLE_IMAGE_WRITE",
       "features": [
         "MILKTEA_GUI"
       ],
       "dependencies": [
-        "raylib6"
+        "milktea_gui"
       ],
       "opt": "Os",
-      "strip-unused": true
+      "strip-unused": true,
+      "macos-min-version": "14.0"
     }
   },
   "dependency-search-paths": [
@@ -75,10 +57,6 @@
   ],
   "dependencies": [
     "ink",
-    "dye",
-    "milktea",
-    "glaze",
-    "xray",
-    "boba"
+    "milktea"
   ]
 }
