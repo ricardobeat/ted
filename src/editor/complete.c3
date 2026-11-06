@@ -194,25 +194,3 @@ fn xray::Node* View.completion_node(&self, glaze::Style item_style, glaze::Style
 	}
 	return list;
 }
-
-// caret_cell is where the primary caret is on screen, relative to the
-// view's rect; false when it is scrolled out of sight.
-fn bool View.caret_cell(&self, sz* col, sz* row) {
-	sz head = self.primary().head;
-	sz line = self.buf.line_of(head);
-	if (line < self.top_line) return false;
-	sz r = 0;
-	for (sz l = self.top_line; l < line && r <= self.height; l++) {
-		r += self.rows_in(l) - (l == self.top_line ? self.top_row : 0);
-	}
-	LineLayout ll;
-	self.layout_line(line, self.text_width, &ll);
-	sz lrow;
-	sz c;
-	ll.locate(head, &lrow, &c);
-	r += lrow - (line == self.top_line ? self.top_row : 0);
-	if (r < 0 || r >= self.height) return false;
-	*col = self.gutter_width() + c;
-	*row = r;
-	return true;
-}

@@ -92,6 +92,9 @@ struct Editor {
 	sz browser_hover;
 
 	Focus focus;
+	// View ▸ Sidebar (Ctrl+B) puts the sidebar away; the editor takes its
+	// room, and focus skips it.
+	bool sidebar_hidden;
 	// The path named on the command line, set by main() before the program
 	// starts. It may not exist yet: then the buffer starts empty under that
 	// name and the file appears on the first save.
@@ -177,6 +180,7 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 		else if (d == "quit") { self.quit_confirm.show(); }
 		else if (d == "menu") { self.menu.open = true; }
 	}
+	self.apply_settings();
 
 	return null;
 }
@@ -323,9 +327,51 @@ fn bool Editor.in_sidebar(&self) {
 fn void Editor.cycle_focus(&self) {
 	switch (self.focus) {
 		case FOCUS_EDITOR:   self.focus = FOCUS_MENU_BAR;
-		case FOCUS_MENU_BAR: self.focus = self.open_file_count > 0 ? FOCUS_SIDEBAR_FILES : FOCUS_SIDEBAR_BROWSER;
+		case FOCUS_MENU_BAR:
+			if (self.sidebar_hidden) return;
+			self.focus = self.open_file_count > 0 ? FOCUS_SIDEBAR_FILES : FOCUS_SIDEBAR_BROWSER;
 		default:             self.focus = FOCUS_MENU_BAR;
 	}
+}
+
+// toggle_sidebar shows or hides the sidebar. Hiding it while it has the
+// keyboard hands the keyboard back to the editor.
+fn void Editor.toggle_sidebar(&self) {
+	self.sidebar_hidden = !self.sidebar_hidden;
+	if (self.sidebar_hidden && self.in_sidebar()) self.focus = FOCUS_EDITOR;
+	self.status_msg = self.sidebar_hidden ? "Sidebar hidden" : "Sidebar shown";
+}
+
+// open_browser moves to the file browser, bringing the sidebar back first
+// if it was put away.
+fn void Editor.open_browser(&self) {
+	self.sidebar_hidden = false;
+	self.focus = FOCUS_SIDEBAR_BROWSER;
+}
+
+fn void Editor.toggle_line_numbers(&self) {
+	self.doc.line_numbers = !self.doc.line_numbers;
+	self.status_msg = self.doc.line_numbers ? "Line numbers on" : "Line numbers off";
+}
+
+// toggle_wrap turns word wrap on or off. Unwrapped, a long line runs past
+// the edge and the view follows the caret across.
+fn void Editor.toggle_wrap(&self) {
+	self.doc.wrap = !self.doc.wrap;
+	self.doc.top_row = 0;
+	self.doc.scroll_to_caret();
+	self.status_msg = self.doc.wrap ? "Word wrap on" : "Word wrap off";
+}
+
+// toggle_fullscreen_mode fills the screen with the window, or puts it back.
+// A terminal's window is the terminal's to size.
+fn void Editor.toggle_fullscreen_mode(&self) {
+	$if $feat(MILKTEA_GUI):
+		toggle_fullscreen();
+		self.status_msg = "Ready";
+	$else
+		self.status_msg = "Full screen is the terminal's to set";
+	$endif
 }
 
 // focus_editor returns to the editor from anywhere.
@@ -445,10 +491,8 @@ fn milktea::Cmd Editor.handle_ctrl_key(&self, milktea::KeyMsg k) {
 				case 'q': return self.quit();
 				case 's': self.save_file();
 				case 'n': self.new_file();
-				case 'o': self.focus = FOCUS_SIDEBAR_BROWSER;
-				case 'b':
-					if (self.in_sidebar()) { self.focus = FOCUS_EDITOR; }
-					else { self.focus = FOCUS_SIDEBAR_FILES; }
+				case 'o': self.open_browser();
+				case 'b': self.toggle_sidebar();
 				case '=': self.set_zoom(1);
 				case '-': self.set_zoom(-1);
 				case '0': self.set_zoom(0);
@@ -546,7 +590,7 @@ fn milktea::Cmd Editor.run_menu_item(&self, String label) {
 			self.new_file();
 			self.focus = FOCUS_EDITOR;
 		case "Open":
-			self.focus = FOCUS_SIDEBAR_BROWSER;
+			self.open_browser();
 		case "Save":
 			self.save_file();
 			self.focus = FOCUS_EDITOR;
@@ -557,8 +601,13 @@ fn milktea::Cmd Editor.run_menu_item(&self, String label) {
 		case "About":
 			self.about.show();
 		case "Sidebar":
-			if (self.in_sidebar()) { self.focus = FOCUS_EDITOR; }
-			else { self.focus = FOCUS_SIDEBAR_FILES; }
+			self.toggle_sidebar();
+		case "Line Numbers":
+			self.toggle_line_numbers();
+		case "Word Wrap":
+			self.toggle_wrap();
+		case "Fullscreen":
+			self.toggle_fullscreen_mode();
 		default:
 			self.status_msg = "Not implemented";
 	}
@@ -698,6 +747,9 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 	self.doc.gutter_current_style = glaze::style().foreground(th.dim).background(th.editor_bg);
 	self.doc.selection_style = glaze::style().background(th.selection);
 	self.doc.caret_style = glaze::style().foreground(th.ink).background(th.cursor);
+	self.doc.current_line_style = glaze::style().foreground(th.editor_fg).background(th.current_line);
+	self.doc.guide_style = glaze::style().foreground(th.guide);
+	self.doc.guide_active_style = glaze::style().foreground(th.guide_active);
 	// Scrollbar: a thin track (│) with a thicker thumb (┃) on the row
 	// matching the view's place in the document. Both share the editor
 	// background so the column reads as part of the page.
@@ -712,7 +764,7 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 	self.browser.height = editor_h;
 
 	xray::Node* editor_row = milktea::hstack().fill(1);
-	editor_row.add(sidebar_node(self));
+	if (!self.sidebar_hidden) editor_row.add(sidebar_node(self));
 
 	// Editor area with 1-cell padding on every side, so the text and
 	// line-number gutter sit inside a margin rather than flush against the

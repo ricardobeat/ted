@@ -193,6 +193,34 @@ fn editor::Context Syntax.context_at(&self, sz pos) @dynamic {
 	return CODE;
 }
 
+// scope_at finds the innermost node around the start of pos's line that
+// starts on an earlier line, short of the whole file: the block the line
+// belongs to, whatever the language calls it.
+fn bool Syntax.scope_at(&self, sz pos, sz* start, sz* end) @dynamic {
+	tree::Tree*? t = self.parsed();
+	if (catch t) return false;
+	*start = 0;
+	*end = 0;
+	editor::Buffer* buf = &self.view.buf;
+	sz line = buf.line_of(pos);
+	// The line's first character, so where on it the caret is makes no
+	// difference; a blank line asks at the caret.
+	String text = self.view.text();
+	sz at = buf.line_start(line);
+	sz line_end = buf.line_end(line);
+	while (at < line_end && (text[at] == ' ' || text[at] == '\t')) at++;
+	if (at == line_end) at = pos;
+	for (tree::Node n = t.node_at(at, at); !n.is_null(); n = n.parent()) {
+		if (n.parent().is_null()) break;
+		if (buf.line_of(n.start()) < line) {
+			*start = n.start();
+			*end = n.end();
+			break;
+		}
+	}
+	return true;
+}
+
 fn String? Syntax.tag_to_close(&self, sz pos) @dynamic {
 	tree::Tree* t = self.parsed()!;
 	return t.tag_to_close(pos);

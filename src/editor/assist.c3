@@ -13,6 +13,11 @@ interface Assist {
 	// Words that could complete prefix, which ends at pos. They are
 	// filtered and ordered by the editor; slices of temp memory will do.
 	fn void completions(sz pos, String prefix, List{String}* out) @optional;
+	// The block pos is in, as a range of the buffer: the innermost one that
+	// starts on a line before pos's, or an empty range when it is in none.
+	// The view draws that block's indent guide brighter. False when the
+	// language is unknown, and the view goes by indentation instead.
+	fn bool scope_at(sz pos, sz* start, sz* end) @optional;
 }
 
 enum Context : char {

@@ -88,16 +88,17 @@ FontSize g_font_size @local = FontSize.PT20;
 fn FontSize font_size() => g_font_size;
 fn sz text_size() => g_text_pt;
 
-// start_font_size reads TED_FONT_SIZE, so the window can be opened at a size
-// other than the default — the same hook TED_FOCUS and TED_OPEN give the rest
-// of the view, and the only way a screenshot can be taken at another size.
-// A value that is not one of the ladder's point sizes is ignored.
+// start_font_size is the size the window opens at: TED_FONT_SIZE, the same
+// hook TED_FOCUS and TED_OPEN give the rest of the view, then font_size from
+// the settings, then the default. A size outside the ladder is ignored.
 fn sz start_text_size() @local {
 	if (try want = env::tget_var("TED_FONT_SIZE")) {
 		if (try pt = want.to_int()) {
 			if (pt >= TEXT_PT_MIN && pt <= TEXT_PT_MAX) return pt;
 		}
 	}
+	sz pt = settings().font_size;
+	if (pt >= TEXT_PT_MIN && pt <= TEXT_PT_MAX) return pt;
 	return GUI_TEXT_DEFAULT;
 }
 
@@ -170,6 +171,10 @@ fn void use_app_font() @local {
 	}
 }
 
+// toggle_fullscreen puts the window in a full-screen space of its own, or
+// back out of it.
+fn void toggle_fullscreen() => milktea_gui::toggle_fullscreen();
+
 // GUI entrypoint, built only by the ted-gui target (see project.json). The
 // terminal build uses ted.c3's main() instead and never links raylib. Same
 // model and same view tree either way; only the display changes.
@@ -190,6 +195,10 @@ fn int main(String[] args) {
 	// The window has no terminal cursor to place, so the caret is painted into
 	// the grid instead of left to the host (see draw_caret).
 	e.doc.caret.draw = &editor::draw_caret;
+	// A font_family from the settings goes where the bundled font would, and
+	// MILKTEA_FONT, set by hand, still wins over both.
+	String family = settings().font_family;
+	if (family.len > 0) env::set_var("MILKTEA_FONT", family, false);
 	use_app_font();
 	String? shot = env::tget_var("TED_SHOT");
 	milktea_gui::run((milktea::Model)&e, {

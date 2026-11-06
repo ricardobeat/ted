@@ -369,6 +369,7 @@ fn xray::Node* sidebar_node(Editor* ed) => sidebar_tree(ed);
 // sidebar_panel_width reports the total cells the sidebar occupies including
 // its border, so dialogs and the editor column can sit cleanly to its right.
 fn sz sidebar_panel_width(Editor* ed) {
+	if (ed.sidebar_hidden) return 0;
 	return sidebar_content_width(ed) + SIDEBAR_BORDER;
 }
 

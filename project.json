@@ -17,6 +17,7 @@
         "test/**",
         "src/sidebar.c3",
         "src/syntax.c3",
+        "src/settings.c3",
         "src/ted.c3"
       ],
       "opt": "Os",
@@ -34,6 +35,7 @@
         "test/**",
         "src/sidebar.c3",
         "src/syntax.c3",
+        "src/settings.c3",
         "src/ted.c3",
         "src/gui_main.c3"
       ],

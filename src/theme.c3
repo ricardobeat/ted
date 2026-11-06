@@ -28,6 +28,11 @@ struct Theme {
 	glaze::Color editor_fg;
 	glaze::Color editor_bg;
 	glaze::Color line_num;
+	// The caret's line, a shade lighter than the editor; the indent guides,
+	// and the one of the caret's block.
+	glaze::Color current_line;
+	glaze::Color guide;
+	glaze::Color guide_active;
 }
 
 fn Theme default_theme() {
@@ -54,6 +59,9 @@ fn Theme default_theme() {
 		.editor_fg = glaze::color_hex("#cdd6f4"),
 		.editor_bg = glaze::color_hex("#1e1e2e"),
 		.line_num = glaze::color_hex("#585b70"),
+		.current_line = glaze::color_hex("#262637"),
+		.guide = glaze::color_hex("#313244"),
+		.guide_active = glaze::color_hex("#6c7086"),
 	};
 }
 
