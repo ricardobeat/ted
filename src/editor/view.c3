@@ -41,10 +41,9 @@ struct View (xray::Content) {
 	sz top_line;
 	sz top_row;
 	// The first display column on screen, when lines do not wrap and one
-	// can run past the right edge, and the part of a column a trackpad has
-	// moved the view across without reaching a whole one.
+	// can run past the right edge. The scroller holds the same place by the
+	// pixel, for a window (see sync_left_col).
 	sz left_col;
-	float left_px;
 	// Blank rows above the first line while a trackpad pulls the view past
 	// the start (see scroller).
 	sz lead_blank;
@@ -100,6 +99,10 @@ struct View (xray::Content) {
 	// when the render that follows laid it out at another size.
 	sz caret_width;
 	sz caret_height;
+	// The view's size, in cells, the GUI scrollbar was drawn against, the
+	// same way.
+	sz bar_width;
+	sz bar_height;
 
 	// Wrapped-row index each line starts at, plus the total at the end, for
 	// the scrollbar. Laying out the whole document on every render to count
@@ -233,6 +236,7 @@ fn void View.set_text(&self, String s) {
 	self.top_line = 0;
 	self.top_row = 0;
 	self.left_col = 0;
+	self.scroller.pos_x_px = 0;
 }
 
 fn String View.text(&self) => self.buf.str();
@@ -490,6 +494,11 @@ fn void View.append_scrollbar(&self, DString* out, sz drawn, sz bar_reserved, sz
 	// The gap cell uses the text style so the background continues out to
 	// the bar — the bar itself is just a vertical line, not a panel.
 	out.append_string(self.text_style.render(" "));
+	// A window draws its scrollbar by the pixel over this cell instead.
+	if (milktea::layout_metrics().pixels) {
+		out.append_string(self.text_style.render(" "));
+		return;
+	}
 	String bar;
 	if (drawn == thumb_row) {
 		bar = self.scrollbar_thumb_style.render("┃");
@@ -601,11 +610,19 @@ fn void View.scroll_to_caret(&self) {
 fn void View.scroll_to_col(&self, sz col) {
 	if (self.wrap) {
 		self.left_col = 0;
+		self.sync_left_col();
 		return;
 	}
 	if (col < self.left_col) self.left_col = col;
 	if (col >= self.left_col + self.text_width) self.left_col = col - self.text_width + 1;
 	if (self.left_col < 0) self.left_col = 0;
+	self.sync_left_col();
+}
+
+// sync_left_col moves the scroller to left_col after it was set by whole
+// columns, keeping the part of a column it is into when it is already there.
+fn void View.sync_left_col(&self) {
+	self.scroller.sync_col(self.left_col);
 }
 
 // line_width is how many columns a line takes on screen.
@@ -626,6 +643,7 @@ fn sz View.line_width(&self, sz line) {
 fn void View.clamp_left_col(&self) {
 	if (self.wrap) {
 		self.left_col = 0;
+		self.scroller.set_columns(0, 0);
 		return;
 	}
 	sz widest = 0;
@@ -637,6 +655,8 @@ fn void View.clamp_left_col(&self) {
 	sz most = widest + 1 - self.text_width;
 	if (self.left_col > most) self.left_col = most;
 	if (self.left_col < 0) self.left_col = 0;
+	self.scroller.set_columns(widest + 1, self.text_width);
+	self.sync_left_col();
 }
 
 // scroll_cols moves the view across by columns without moving the caret.
@@ -652,13 +672,8 @@ fn void View.scroll_cols(&self, sz cols) {
 // took the message.
 fn bool View.scroll_msg_x(&self, milktea::MouseMsg m) {
 	if (self.wrap || m.scroll_dx == 0) return false;
-	float unit = (float)milktea::layout_metrics().unit_w();
-	self.left_px -= m.scroll_dx;
-	sz cols = (sz)(self.left_px / unit);
-	if (cols != 0) {
-		self.left_px -= (float)cols * unit;
-		self.scroll_cols(cols);
-	}
+	self.scroller.scroll_x_pixels(m.scroll_dx);
+	self.left_col = self.scroller.left_col();
 	return true;
 }
 
@@ -886,16 +901,20 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 	// out text so a wrapped line never lands under it.
 	sz bar_reserved = self.scrollbar_reserved();
 	self.rect = r;
-	self.text_width = r.w - gutter - bar_reserved;
-	// A smooth scroll part-way into a row asks for one row more than fits.
-	bool extra = milktea::layout_metrics().pixels && self.scroller.shift() > 0;
+	// A smooth scroll part-way into a row asks for one row more than fits,
+	// and part-way into a column for one column more.
+	bool pixels = milktea::layout_metrics().pixels;
+	bool extra = pixels && self.scroller.shift() > 0;
+	sz extra_cols = pixels && !self.wrap && self.scroller.shift_x() > 0 ? 1 : 0;
+	self.text_width = r.w - extra_cols - gutter - bar_reserved;
 	self.height = extra ? r.h - 1 : r.h;
 	if (self.text_width < 1) self.text_width = 1;
 	sz caret_line = self.buf.line_of(self.primary().head);
 	self.clamp_left_col();
-	if (self.caret_kind != BLOCK && (self.text_width != self.caret_width || self.height != self.caret_height)) {
-		milktea::frames_until(milktea::frame_ms() + 50);
-	}
+	bool caret_moved = self.caret_kind != BLOCK
+		&& (self.text_width != self.caret_width || self.height != self.caret_height);
+	bool bar_moved = pixels && (r.w != self.bar_width || r.h != self.bar_height);
+	if (caret_moved || bar_moved) milktea::frames_until(milktea::frame_ms() + 50);
 	ActiveGuide active = self.guides != NONE ? self.active_guide() : {};
 
 	// The thumb sits at the row of the visible range that matches the view's
@@ -951,7 +970,7 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 				from = 0;
 				for (sz i = 0; i < ll.rows[ri].first; i++) from += ll.glyphs[i].width;
 			}
-			emit_row(&out, pieces.array_view(), from, self.text_width, base);
+			emit_row(&out, pieces.array_view(), from, self.text_width + extra_cols, base);
 			self.append_scrollbar(&out, drawn, bar_reserved, thumb_row);
 			drawn++;
 		}
@@ -1079,7 +1098,7 @@ fn xray::Node* View.caret_node(&self) {
 	sz row;
 	if (!self.caret_cell(&col, &row) || !self.caret_on()) return null;
 	xray::LayoutMetrics m = milktea::layout_metrics();
-	sz x = col * m.unit_w();
+	sz x = col * m.unit_w() - self.scroller.shift_x();
 	sz y = row * m.unit_h() - self.scroller.shift();
 	if (y < 0) return null;
 	xray::Node* n = xray::vstack();
@@ -1123,9 +1142,42 @@ fn xray::Node* View.node(&self) {
 		self.set_top_row(sc.top_row());
 	}
 	if (!milktea::layout_metrics().pixels) return n;
+	// The gutter and the scrollbar's cells stay put while the text scrolls
+	// sideways by the pixel.
+	n.fixed_cols(self.gutter_width(), self.scrollbar_reserved());
 	xray::Node* caret = self.caret_node();
-	if (!caret) return n;
-	return xray::zstack().add(n).add(caret);
+	xray::Node* bar = self.scrollbar_node();
+	if (!caret && !bar) return n;
+	xray::Node* z = xray::zstack().add(n);
+	if (caret) z.add(caret);
+	if (bar) z.add(bar);
+	return z;
+}
+
+// The window's scrollbar, in points: the thumb's width, its shortest, and
+// the room left at the top and bottom of the track.
+const sz SCROLLBAR_THUMB_W = 4;
+const sz SCROLLBAR_MIN_THUMB = 24;
+const sz SCROLLBAR_INSET = 2;
+
+// scrollbar_node is the window's scrollbar, drawn by the pixel over the last
+// cell of each row, which the text leaves blank there (see append_scrollbar).
+// Like caret_node it is placed against the last render's size, and render
+// asks for another frame when that changes.
+fn xray::Node* View.scrollbar_node(&self) {
+	self.bar_width = self.rect.w;
+	self.bar_height = self.rect.h;
+	if (self.scrollbar_reserved() <= 0 || self.rect.w <= 0) return null;
+	xray::LayoutMetrics m = milktea::layout_metrics();
+	boba::ScrollbarStyle style = {
+		.thumb = self.scrollbar_thumb_style.fg,
+		.width = SCROLLBAR_THUMB_W,
+		.min_thumb = SCROLLBAR_MIN_THUMB,
+	};
+	xray::Node* bar = self.scroller.scrollbar(self.rect.h * m.unit_h() - 2 * SCROLLBAR_INSET, style);
+	if (!bar) return null;
+	sz x = (self.rect.w - 1) * m.unit_w() + (m.unit_w() - SCROLLBAR_THUMB_W) / 2;
+	return bar.at(x, SCROLLBAR_INSET, PX);
 }
 
 fn void View.on_press(&self, ViewPressFn f, void* ctx) {
