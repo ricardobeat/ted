@@ -375,7 +375,7 @@ fn sz View.total_rows(&self) {
 }
 
 // update_row_starts rebuilds row_starts when its key no longer matches.
-fn void View.update_row_starts(&self) @local {
+fn void View.update_row_starts(&self) {
 	usz layers = 0;
 	foreach (&l : self.layers) layers = layers * 31 + (usz)l.items.len() * 7919 + (usz)l.texts.len();
 	RowKey key = { self.buf.version, self.text_width, self.wrap, self.tab_width, layers };
