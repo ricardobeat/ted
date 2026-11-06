@@ -35,9 +35,6 @@ struct Menu {
 	sz selected;
 	sz item;
 	bool open;
-	// The title under the pointer, which gets a lighter highlight than the
-	// selected one.
-	bool[MENU_COLS] hovered;
 	sz item_width;
 	TitleSlot[MENU_COLS] title_slots;
 	ItemSlot[MENU_ITEMS] item_slots;
@@ -167,15 +164,9 @@ fn void item_hovered(void* id, String id_str, sz col, sz row) @local {
 fn void title_hovered(void* id, String id_str, sz col, sz row) @local {
 	TitleSlot* slot = (TitleSlot*)id;
 	Menu* m = slot.menu;
-	m.hovered[slot.index] = true;
 	if (!m.open || m.selected == slot.index) return;
 	m.selected = slot.index;
 	m.item = 0;
-}
-
-fn void title_unhovered(void* id, String id_str, sz col, sz row) @local {
-	TitleSlot* slot = (TitleSlot*)id;
-	slot.menu.hovered[slot.index] = false;
 }
 
 fn void dropdown_dismissed(void* id, String id_str, sz col, sz row) @local {
@@ -216,16 +207,14 @@ fn xray::Node* Menu.bar(&self, Theme* th, bool focused, xray::Node* lead = null,
 	for (sz i = 0; i < MENU_COLS; i++) {
 		self.title_slots[i] = { .menu = self, .index = i };
 		bool highlighted = (focused || self.open) && i == self.selected;
-		xray::Node* title_node;
-		if (highlighted) {
-			title_node = highlight(milktea::text(self.titles[i], highlight_style(active)), active.bg);
-		} else if (self.hovered[i]) {
-			title_node = highlight(milktea::text(self.titles[i], highlight_style(hover)), hover.bg);
-		} else {
-			title_node = milktea::text(self.titles[i], bar);
-		}
+		// The title's colours are its box's, which the text inherits, so the
+		// hover bg reaches it; in the GUI the decoration rounds that bg.
+		glaze::Style s = highlighted ? active : bar;
+		xray::Node* title_node = milktea::text(self.titles[i], { .bold = s.bold })
+			.style({ .bg = s.bg, .fg = s.fg }, hover: highlighted ? (glaze::Style){} : hover);
+		if (pixel_ui()) title_node.decorate(xray::solid().round(HIGHLIGHT_RADIUS));
 		title_node.fit_width().id_with(&self.title_slots[i])
-			.on_click(&title_clicked).on_hover_in(&title_hovered).on_hover_out(&title_unhovered);
+			.on_click(&title_clicked).on_hover_in(&title_hovered);
 		row.add(title_node);
 	}
 	row.add(milktea::text("", filler).fill(1).window_drag(true));
