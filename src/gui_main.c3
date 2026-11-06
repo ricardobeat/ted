@@ -170,6 +170,14 @@ fn void use_app_font() @local {
 	}
 }
 
+// make_room_for_window_buttons centres the platform's window buttons on the
+// top bar, whose height follows the text size, and starts the menu titles
+// after them.
+fn void Editor.make_room_for_window_buttons(&self) {
+	milktea_gui::set_chrome_height((int)top_bar_pixel_height());
+	self.menu.x_inset = milktea_gui::chrome_inset_cells((int)milktea::layout_metrics().unit_w());
+}
+
 // GUI entrypoint, built only by the ted-gui target (see project.json). The
 // terminal build uses ted.c3's main() instead and never links raylib. Same
 // model and same view tree either way; only the display changes.
@@ -181,16 +189,12 @@ fn void use_app_font() @local {
 fn int main(String[] args) {
 	Editor e = { };
 	if (args.len > 1) e.open_arg = args[1];
-	// The window has no title bar of its own and no buttons from the
-	// platform either: the top row of the view stands in for both, drawing
-	// its own close/minimise/zoom glyphs (see chrome.c3) and letting a drag
-	// anywhere between them and the menu titles move the window. The cells
-	// reserved for those glyphs are the app's own count, not the platform's:
-	// with the buttons hidden there is nothing left to measure.
+	// The window has no title bar: the top row of the view stands in for it,
+	// with the platform's own window buttons moved into it (see Editor.view)
+	// and a drag on the rest of the row moving the window.
 	g_text_pt = start_text_size();
 	g_font_size = cell_step_for(g_text_pt);
 	sz cell_w = cell_w_for(g_font_size.pt);
-	e.chrome_cells = chrome_on_left() ? CHROME_CELLS : 0;
 	// The window has no terminal cursor to place, so the caret is painted into
 	// the grid instead of left to the host (see draw_caret).
 	e.doc.caret.draw = &editor::draw_caret;
@@ -202,7 +206,6 @@ fn int main(String[] args) {
 		.cell_w = (int)cell_w, .cell_h = (int)g_font_size.pt,
 		.font_size = (int)g_text_pt,
 		.chrome_rows = 1,
-		.hide_window_buttons = true,
 		.screenshot_path = shot ?? "",
 	});
 	return 0;

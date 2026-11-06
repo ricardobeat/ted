@@ -15,11 +15,12 @@ const sz BAR_ROWS = 1;
 const sz STATUS_ROWS = 1;
 const sz BAR_PADDING_Y = 4;
 const sz BAR_PADDING_X = 8;
-const sz WINDOW_LIGHT_DIAMETER = 14;
+// The window buttons are this tall, so the bar never gets shorter.
+const sz WINDOW_BUTTON_HEIGHT = 14;
 
 fn sz top_bar_pixel_height() {
 	sz height = milktea::layout_metrics().unit_h();
-	if (height < WINDOW_LIGHT_DIAMETER) height = WINDOW_LIGHT_DIAMETER;
+	if (height < WINDOW_BUTTON_HEIGHT) height = WINDOW_BUTTON_HEIGHT;
 	return height + BAR_PADDING_Y * 2;
 }
 const sz STATUS_PAD = 2;
@@ -89,11 +90,6 @@ struct Editor {
 	BrowserSlot[MAX_BROWSER_ROWS] browser_slots;
 	sz browser_hover;
 
-	// Cells reserved at the left of the top bar for window buttons drawn by
-	// the platform (see gui_main.c3); zero in the terminal.
-	sz chrome_cells;
-	// The pointer is over the window buttons, which then show their glyphs.
-	bool lights_hover;
 	Focus focus;
 	// The path named on the command line, set by main() before the program
 	// starts. It may not exist yet: then the buffer starts empty under that
@@ -112,7 +108,6 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	Theme* th = &self.theme;
 
 	self.menu = new_menu({ " File ", " Edit ", " View ", " Help " });
-	self.menu.x_inset = self.chrome_cells;
 	self.menu.set_items(0, { {"New", "Ctrl+N"}, {"Open", "Ctrl+O"}, {"Save", "Ctrl+S"}, {"Quit", "Ctrl+Q"} });
 	self.menu.set_items(1, { {"Undo", "Ctrl+Z"}, {"Cut", "Ctrl+X"}, {"Copy", "Ctrl+C"}, {"Paste", "Ctrl+V"} });
 	self.menu.set_items(2, { {"Sidebar", "Ctrl+B"}, {"Line Numbers", ""}, {"Word Wrap", ""}, {"Fullscreen", "F11"} });
@@ -744,17 +739,14 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 		.h = editor_h,
 	};
 
-	// In the GUI the top row stands in for the title bar, so it carries the
-	// window buttons the platform no longer draws. In the terminal there is
-	// no window to close and both ends stay empty.
+	// In the GUI the top row stands in for the title bar, and the platform's
+	// window buttons sit in it, centred on the bar; the menu titles start
+	// after them. In the terminal there is no window and nothing to make
+	// room for.
 	xray::Node* lead = null;
 	xray::Node* trail = null;
 	$if $feat(MILKTEA_GUI):
-		if (chrome_on_left()) {
-			lead = window_lights(th, self);
-		} else {
-			trail = window_lights(th, self);
-		}
+		self.make_room_for_window_buttons();
 	$endif
 
 	// A terminal reports the pointer only in all-motion mode, which hover
