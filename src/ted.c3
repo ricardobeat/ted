@@ -349,9 +349,17 @@ fn void Editor.open_browser(&self) {
 	self.focus = FOCUS_SIDEBAR_BROWSER;
 }
 
+// toggle_line_numbers hides the gutter, or brings it back the way the
+// settings have it (every line, when they turn it off).
 fn void Editor.toggle_line_numbers(&self) {
-	self.doc.line_numbers = !self.doc.line_numbers;
-	self.status_msg = self.doc.line_numbers ? "Line numbers on" : "Line numbers off";
+	if (self.doc.line_numbers != NONE) {
+		self.doc.line_numbers = NONE;
+		self.status_msg = "Line numbers off";
+		return;
+	}
+	editor::LineNumbers want = settings().line_numbers;
+	self.doc.line_numbers = want == NONE ? ALL : want;
+	self.status_msg = "Line numbers on";
 }
 
 // toggle_wrap turns word wrap on or off. Unwrapped, a long line runs past
@@ -755,6 +763,7 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 		.foreground(self.doc.focused ? th.editor_fg : th.dim).background(th.editor_bg);
 	self.doc.gutter_style = glaze::style().foreground(th.line_num).background(th.editor_bg);
 	self.doc.gutter_current_style = glaze::style().foreground(th.dim).background(th.editor_bg);
+	self.doc.gutter_faded_style = glaze::style().foreground(th.line_faded).background(th.editor_bg);
 	self.doc.selection_style = glaze::style().background(th.selection);
 	self.doc.caret_style = glaze::style().foreground(th.ink).background(th.cursor);
 	self.doc.current_line_style = glaze::style().foreground(th.editor_fg).background(th.current_line);

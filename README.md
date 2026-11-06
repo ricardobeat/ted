@@ -28,11 +28,11 @@ or `~/.config/ted/settings.json`. For example:
 
 ```jsonc
 {
-  "caret": "bar",              // block, bar, underline
+  "caret": "bar",               // block, bar, underline
   "font_size": 14,
   "font_family": "Menlo",
   "word_wrap": true,
-  "line_numbers": false,
-  "indent_guides": "all"       // current, all, none
+  "line_numbers": 10,           // true, false, every n-th line
+  "indent_guides": "all"        // current, all, none
 }
 ```

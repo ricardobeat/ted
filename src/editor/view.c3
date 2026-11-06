@@ -60,7 +60,10 @@ struct View (xray::Content) {
 
 	bool focused;
 	bool wrap;
-	bool line_numbers;
+	// Which lines show their number in the gutter; with EVERY, all of them,
+	// the rest faded beside each number_every-th line and the caret's.
+	LineNumbers line_numbers;
+	sz number_every;
 	// A lighter background behind the caret's line, and which guides are
 	// drawn in indentation.
 	bool highlight_line;
@@ -73,6 +76,8 @@ struct View (xray::Content) {
 	glaze::Style text_style;
 	glaze::Style gutter_style;
 	glaze::Style gutter_current_style;
+	// The numbers between every n-th line (see LineNumbers).
+	glaze::Style gutter_faded_style;
 	glaze::Style selection_style;
 	// Only the background is used: it takes the place of the text's.
 	glaze::Style current_line_style;
@@ -117,6 +122,21 @@ enum GuideMode : char {
 	NONE,
 	CURRENT,
 	ALL,
+}
+
+// LineNumbers says how lines are numbered: not at all (and no gutter), every
+// line alike, or every line with only every so many, and the caret's, at
+// full strength and the rest faded.
+enum LineNumbers : char {
+	NONE,
+	ALL,
+	EVERY,
+}
+
+// faded reports whether a line's number is drawn faded.
+fn bool View.faded(&self, sz line, sz caret_line) {
+	if (self.line_numbers != EVERY || line == caret_line) return false;
+	return self.number_every <= 0 || (line + 1) % self.number_every != 0;
 }
 
 // CaretKind is how the caret is drawn: over the whole cell, as a thin bar at
@@ -176,7 +196,8 @@ fn void View.init(&self) {
 	self.text_width = 80;
 	self.height = 24;
 	self.wrap = false;
-	self.line_numbers = true;
+	self.line_numbers = ALL;
+	self.number_every = 5;
 	self.highlight_line = true;
 	self.guides = CURRENT;
 	self.tab_width = 4;
@@ -479,7 +500,7 @@ fn void View.append_scrollbar(&self, DString* out, sz drawn, sz bar_reserved, sz
 }
 
 fn sz View.gutter_width(&self) {
-	if (!self.line_numbers) return 0;
+	if (self.line_numbers == NONE) return 0;
 	sz digits = 1;
 	for (sz n = self.buf.line_count(); n >= 10; n /= 10) digits++;
 	if (digits < 3) digits = 3;
@@ -915,7 +936,8 @@ fn String View.render(&self, xray::Rect r) @dynamic {
 		for (sz ri = line == self.top_line ? self.top_row : 0; ri < ll.rows.len() && drawn < r.h; ri++) {
 			if (drawn > 0) out.append_char('\n');
 			if (gutter > 0) {
-				glaze::Style gs = line == caret_line ? self.gutter_current_style : self.gutter_style;
+				glaze::Style gs = line == caret_line ? self.gutter_current_style
+					: self.faded(line, caret_line) ? self.gutter_faded_style : self.gutter_style;
 				String num = ri == 0 ? pad_left(string::tformat("%d  ", line + 1), gutter) : spaces(gutter);
 				out.append_string(gs.render(num));
 			}

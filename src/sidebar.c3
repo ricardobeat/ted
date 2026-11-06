@@ -11,13 +11,22 @@ import std::core::dstring;
 
 const sz SIDEBAR_WIDTH_MAX = 38; // widest the sidebar's content gets; the
                                   // border adds two more on top of this
-const sz SIDEBAR_WIDTH_MIN = 30; // narrowest the sidebar ever shrinks to
+const sz SIDEBAR_WIDTH_MIN = 24; // narrowest the sidebar ever shrinks to
 const sz SIDEBAR_BORDER = 2; // one cell on each side for the panel border
 // Cells between the panel's border and the text in it. One is enough to keep
 // the names off the rule; the cursor marker takes this cell on the row it is
 // on, so marked and unmarked rows still start in the same column.
 const String SIDEBAR_PAD = " ";
 const String SIDEBAR_MARK = "▸";
+
+// dir_label is how the browser's directory is named in its header: the last
+// part of its real path, so "." reads as the folder's name.
+fn String dir_label(String dir) {
+	char[1024] resolved;
+	ZString real = realpath(dir.zstr_tcopy(), &resolved);
+	if (!real) return sidebar_basename(dir);
+	return sidebar_basename(real.str_view()).tcopy();
+}
 
 fn String sidebar_basename(String path) {
 	sz last = 0;
@@ -198,15 +207,19 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 	Theme* th = &ed.theme;
 	sz content_w = sidebar_content_width(ed);
 	glaze::Style bg = { .bg = th.browser_bg, .fg = th.browser_fg };
-	glaze::Style file_row = { .fg = th.browser_fg, .bg = th.browser_bg };
-	glaze::Style file_row_hover = { .fg = th.text, .bg = th.selection };
+	glaze::Style file_row = { .fg = th.sidebar_file, .bg = th.browser_bg };
+	glaze::Style current_row = { .fg = th.text, .bg = th.browser_bg };
+	// Hover lightens the row's background a little and leaves its text as
+	// it was; the keyboard cursor is the accent, tinted down so it marks the
+	// row without outshouting the names.
+	glaze::Color hover_bg = dye::color_rgba(255, 255, 255, 14).blend_over(th.browser_bg);
 	glaze::Style file_row_focused = {
-		.fg = th.ink, .bg = th.accent, .bold = true,
+		.fg = th.text, .bg = dye::color_rgba(th.accent.r, th.accent.g, th.accent.b, 70).blend_over(th.browser_bg),
 	};
 
 	glaze::Style panel = panel_style({
 		.bg = th.browser_bg, .fg = th.browser_fg,
-		.border = glaze::NORMAL, .border_color = th.border,
+		.border = glaze::NORMAL, .border_color = th.sidebar_border,
 		.border_bg = th.browser_bg,
 	});
 	xray::Node* v = sidebar_panel(xray::vstack().style(panel), th);
@@ -234,12 +247,17 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 			String prefix = is_current ? SIDEBAR_MARK : SIDEBAR_PAD;
 			String mark = (is_current && ed.modified) ? " [+]" : "";
 			String text = string::tformat("%s%s%s", prefix, name, mark);
-			glaze::Style* s;
-			if (files_active && is_current) { s = &file_row_focused; }
-			else if (i == ed.file_hover) { s = &file_row_hover; }
-			else { s = &file_row; }
+			glaze::Style s = is_current ? current_row : file_row;
+			bool lit = false;
+			if (files_active && is_current) {
+				s = file_row_focused;
+				lit = true;
+			} else if (i == ed.file_hover) {
+				s.bg = hover_bg;
+				lit = true;
+			}
 			ed.file_slots[i] = { .ed = ed, .index = i };
-			xray::Node* row = sidebar_text(*s, text, s != &file_row);
+			xray::Node* row = sidebar_text(s, text, lit);
 			row.id_with(&ed.file_slots[i])
 				.on_click(&file_row_clicked)
 				.on_hover_in(&file_row_hover_in)
@@ -254,7 +272,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 	// its title and the cursor's `> ` marker do not fit the sidebar's shared
 	// accent highlight, and the row click goes through ted's own BrowserSlot
 	// so it can apply the same focus logic as the open-files panel above.
-	sidebar_add_browser(ed, v, content_w, &bg, &file_row, &file_row_hover, &file_row_focused);
+	sidebar_add_browser(ed, v, content_w, &bg, &file_row, hover_bg, &file_row_focused);
 
 	return sidebar_frame(v, content_w + SIDEBAR_BORDER, th);
 }
@@ -266,9 +284,9 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 // the two panels read as a single highlighted list.
 fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 		glaze::Style* bg, glaze::Style* file_row,
-		glaze::Style* file_row_hover, glaze::Style* file_row_focused) @local {
+		glaze::Color hover_bg, glaze::Style* file_row_focused) @local {
 	Theme* th = &ed.theme;
-	v.add(sidebar_header(th, "Files", ed.browser.current_dir, content_w, true));
+	v.add(sidebar_header(th, "Files", dir_label(ed.browser.current_dir), content_w, true));
 
 	// The picker's tree_node() reserves 4 rows for title + hint + padding;
 	// the sidebar's header here replaces the title, so visible rows are the
@@ -294,13 +312,22 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 		String suffix = ed.browser.is_dirs[i] ? "/" : "";
 		bool is_cursor = i == ed.browser.cursor;
 		bool is_hover = i == ed.browser_hover;
-		glaze::Style* s;
-		if (browser_active && is_cursor) { s = file_row_focused; }
-		else if (is_hover) { s = file_row_hover; }
-		else { s = file_row; }
-		String text = string::tformat("%s%s%s", SIDEBAR_PAD, name, suffix);
 		ed.browser_slots[i] = { .ed = ed, .index = i };
-		xray::Node* row = sidebar_text(*s, text, s != file_row);
+		xray::Node* row;
+		if (browser_active && is_cursor) {
+			row = sidebar_text(*file_row_focused, string::tformat("%s%s%s", SIDEBAR_PAD, name, suffix), true);
+		} else {
+			glaze::Style s = *file_row;
+			if (is_hover) s.bg = hover_bg;
+			String text = string::tformat("%s%s", SIDEBAR_PAD, name);
+			if (ed.browser.is_dirs[i]) {
+				// A directory a step brighter than a file, its slash dimmer.
+				glaze::Style dir = highlight_style({ .fg = th.sidebar_dir, .bg = s.bg });
+				glaze::Style slash = highlight_style({ .fg = th.dim, .bg = s.bg });
+				text = string::tformat("%s%s", dir.render(text), slash.render(suffix));
+			}
+			row = sidebar_text(s, text, is_hover);
+		}
 		row.id_with(&ed.browser_slots[i])
 			.on_click(&browser_row_index_clicked)
 			.on_hover_in(&browser_row_hover_in)
@@ -342,9 +369,9 @@ fn xray::Node* sidebar_panel(xray::Node* n, Theme* th) @local {
 	glaze::Color bottom = dye::color_rgba(0, 0, 0, 12).blend_over(th.browser_bg);
 	n.decorate(xray::linear(top, bottom, 90.0f)
 		.round(PANEL_RADIUS)
-		.with_border(1.0f, th.border)
-		.with_shadow(0.0f, 2.0f, 10.0f, dye::color_rgba(0, 0, 0, 90))
-		.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 14))
+		.with_border(1.0f, th.sidebar_border)
+		.with_shadow(0.0f, 1.0f, 4.0f, dye::color_rgba(0, 0, 0, 40))
+		.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 8))
 		.padding(PANEL_PAD_Y, 0, PANEL_PAD_Y, 0));
 	return n;
 }
@@ -384,23 +411,31 @@ fn void sidebar_init(Editor* ed) {
 	ed.doc.on_press(&editor_pressed, ed);
 }
 
-// sidebar_header is a section's title row. In a terminal it is the label
-// and a dim rule filling the panel, so the sidebar reads as labelled groups
-// rather than running the titles into the lists below them. In the GUI it is
-// a source list's section label: small caps in a dim colour with room above
-// it, which needs no rule to set it apart. detail follows the label, dimmer
-// still (the browser's directory). spaced adds the room above in the GUI for
-// a section that follows another.
+// sidebar_header is a section's title row: the label, its detail dimmer
+// still (the browser's directory), and a faint rule out to the panel's edge,
+// so the sidebar reads as labelled groups. The terminal draws the same with
+// its own colours (see section_header). spaced adds room above in the GUI
+// for a section that follows another.
 fn xray::Node* sidebar_header(Theme* th, String label, String detail, sz content_w, bool spaced) @local {
 	if (!pixel_ui()) {
 		return milktea::text(section_header(th, label, detail, content_w), { .bg = th.browser_bg })
 			.height(milktea::cells(1));
 	}
-	glaze::Style title = { .fg = th.dim, .bold = true };
+	glaze::Style title = { .fg = th.dim };
 	glaze::Style faint = { .fg = dye::color_rgba(0, 0, 0, 90).blend_over(th.dim) };
+	glaze::Style rule = { .fg = th.sidebar_border };
+	String head = string::tformat("%s%s", SIDEBAR_PAD, label);
+	String tail = detail.len > 0 ? string::tformat(" %s", detail) : "";
+	sz fill = content_w - glaze::string_width(head) - glaze::string_width(tail);
 	DString out = dstring::temp();
-	out.append_string(title.render(string::tformat("%s%s", SIDEBAR_PAD, label.to_upper_tcopy())));
-	if (detail.len > 0) out.append_string(faint.render(string::tformat("  %s", detail)));
+	out.append_string(title.render(head));
+	if (tail.len > 0) out.append_string(faint.render(tail));
+	if (fill > 0) {
+		DString dashes = dstring::temp();
+		dashes.append_char(' ');
+		for (sz i = 1; i < fill; i++) dashes.append_string("─");
+		out.append_string(rule.render(dashes.str_view()));
+	}
 	return milktea::text(out.str_view()).height(milktea::cells(1))
 		.decorate(xray::solid(xray::color_transparent()).padding(spaced ? 4 : 0, 0, 2, 0));
 }

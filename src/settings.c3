@@ -21,7 +21,7 @@ import std::os::env;
 //     "font_size": 16,            // points, 11 to 33 (window only)
 //     "font_family": "Menlo",     // a font name or a file (window only)
 //     "word_wrap": false,
-//     "line_numbers": true,
+//     "line_numbers": true,       // true, false, or number every n-th line
 //     "indent_guides": "current"  // "current", "all" or "none"
 //   }
 //
@@ -34,7 +34,8 @@ struct Settings {
 	// Empty uses the bundled font.
 	String font_family;
 	bool word_wrap;
-	bool line_numbers;
+	editor::LineNumbers line_numbers;
+	sz number_every;
 	editor::GuideMode indent_guides;
 	// The path read, and what was wrong with it, if anything.
 	String path;
@@ -57,7 +58,8 @@ fn Settings default_settings() @local {
 	return {
 		.caret = BLOCK,
 		.word_wrap = false,
-		.line_numbers = true,
+		.line_numbers = ALL,
+		.number_every = 5,
 		.indent_guides = CURRENT,
 	};
 }
@@ -140,8 +142,7 @@ fn void Settings.read(&self, Object* root) {
 		if (try v) { self.word_wrap = v; } else { self.bad("word_wrap", "true or false"); }
 	}
 	if (root.has_key("line_numbers")) {
-		bool? v = root.get_bool("line_numbers");
-		if (try v) { self.line_numbers = v; } else { self.bad("line_numbers", "true or false"); }
+		self.read_line_numbers(root.get("line_numbers")!!);
 	}
 	if (root.has_key("indent_guides")) {
 		String? v = root.get_string("indent_guides");
@@ -158,6 +159,20 @@ fn void Settings.read(&self, Object* root) {
 	}
 }
 
+// read_line_numbers takes true, false, or n to number every n-th line.
+fn void Settings.read_line_numbers(&self, Object* v) {
+	if (v.is_bool()) {
+		self.line_numbers = v.b ? ALL : NONE;
+		return;
+	}
+	if (v.is_int() && v.i >= 1) {
+		self.line_numbers = EVERY;
+		self.number_every = (sz)v.i;
+		return;
+	}
+	self.bad("line_numbers", "true, false or a number from 1 up");
+}
+
 fn void Settings.bad(&self, String key, String want) {
 	if (self.problem.len) return;
 	self.problem = string::format(mem, "Settings: %s should be %s", key, want);
@@ -169,6 +184,7 @@ fn void Editor.apply_settings(&self) {
 	self.doc.set_caret_kind(s.caret);
 	self.doc.wrap = s.word_wrap;
 	self.doc.line_numbers = s.line_numbers;
+	self.doc.number_every = s.number_every;
 	self.doc.guides = s.indent_guides;
 	if (s.problem.len) self.status_msg = s.problem;
 }
