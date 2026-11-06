@@ -15,7 +15,6 @@
         "src/command_bar.c3",
         "src/file_search.c3",
         "test/**",
-        "src/menu.c3",
         "src/sidebar.c3",
         "src/syntax.c3",
         "src/ted.c3"
@@ -33,7 +32,6 @@
         "src/command_bar.c3",
         "src/file_search.c3",
         "test/**",
-        "src/menu.c3",
         "src/sidebar.c3",
         "src/syntax.c3",
         "src/ted.c3",

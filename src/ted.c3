@@ -4,6 +4,7 @@ import milktea;
 import glaze;
 import xray;
 import boba;
+import dye;
 import ted::editor;
 import std::io;
 import std::io::file;
@@ -59,7 +60,7 @@ const sz MAX_OPEN_FILES = 16;
 const sz MAX_BROWSER_ROWS = 64;
 
 struct Editor {
-	Menu menu;
+	boba::MenuBar menu;
 	Dialog shortcuts;
 	Dialog about;
 	Dialog quit_confirm;
@@ -107,11 +108,16 @@ fn milktea::Cmd Editor.init(Editor* self) @dynamic {
 	self.theme = default_theme();
 	Theme* th = &self.theme;
 
-	self.menu = new_menu({ " File ", " Edit ", " View ", " Help " });
-	self.menu.set_items(0, { {"New", "Ctrl+N"}, {"Open", "Ctrl+O"}, {"Save", "Ctrl+S"}, {"Quit", "Ctrl+Q"} });
-	self.menu.set_items(1, { {"Undo", "Ctrl+Z"}, {"Cut", "Ctrl+X"}, {"Copy", "Ctrl+C"}, {"Paste", "Ctrl+V"} });
-	self.menu.set_items(2, { {"Sidebar", "Ctrl+B"}, {"Line Numbers", ""}, {"Word Wrap", ""}, {"Fullscreen", "F11"} });
-	self.menu.set_items(3, { {"Shortcuts", "?"}, {"About", ""}, {"", ""}, {"", ""} });
+	self.menu = boba::menu_bar({
+		boba::menu(" File ", { boba::item("New", 'n'), boba::item("Open", 'o'), boba::item("Save", 's'),
+			boba::separator(), boba::item("Quit", 'q') }),
+		boba::menu(" Edit ", { boba::item("Undo", 'z'), boba::separator(), boba::item("Cut", 'x'),
+			boba::item("Copy", 'c'), boba::item("Paste", 'v') }),
+		boba::menu(" View ", { boba::item("Sidebar", 'b'), boba::item("Line Numbers"), boba::item("Word Wrap"),
+			boba::item("Fullscreen") }),
+		boba::menu(" Help ", { boba::item("Shortcuts"), boba::item("About") }),
+	});
+	self.menu.min_panel_width = 24;
 
 	self.shortcuts = new_dialog("Keyboard Shortcuts",
 		"Ctrl+P   Search files\n"
@@ -340,6 +346,10 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 		return null;
 	}
 
+	if (msg.kind == milktea::MsgKind.MENU || msg.kind == milktea::MsgKind.MOUSE) {
+		boba::MenuEvent ev = self.menu.update(msg);
+		if (ev.kind != NONE) return self.menu_event(ev, msg.kind == milktea::MsgKind.MENU);
+	}
 	if (msg.kind == milktea::MsgKind.MOUSE) {
 		if (self.wheel_scroll(msg.mouse)) return null;
 		return self.handle_mouse_result();
@@ -363,9 +373,13 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	if (self.about.open) return self.handle_about_key(k);
 	if (self.quit_confirm.open) return self.handle_quit_confirm_key(k);
 
-	// While the dropdown is open, the menu owns every key (LEFT/RIGHT/UP/DOWN/
-	// ENTER/ESC). Anything else is ignored.
-	if (self.menu.open) return self.handle_menu_key(k);
+	// While a dropdown is open, or the focus is on the bar, the bar takes the
+	// keys it knows (the arrows, Enter, Esc); an open dropdown takes all.
+	self.menu.active = self.focus == FOCUS_MENU_BAR;
+	if (self.menu.open || self.menu.active) {
+		boba::MenuEvent ev = self.menu.update(msg);
+		if (ev.kind != NONE || self.menu.open) return self.menu_event(ev, false);
+	}
 
 	// '?' opens shortcuts from anywhere.
 	if (k.code == milktea::KeyCode.RUNE && k.rune == '?' && !k.ctrl && !k.super) {
@@ -402,7 +416,6 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 	}
 
 	switch (self.focus) {
-		case FOCUS_MENU_BAR: return self.handle_menu_bar_key(k);
 		case FOCUS_SIDEBAR_FILES: return self.handle_sidebar_files_key(k);
 		case FOCUS_SIDEBAR_BROWSER: return self.handle_sidebar_browser_key(k);
 		case FOCUS_EDITOR:
@@ -447,21 +460,6 @@ fn milktea::Cmd Editor.handle_ctrl_key(&self, milktea::KeyMsg k) {
 			// Ctrl with a navigation key moves by words or to the ends of the
 			// document; those are the editor's.
 			if (self.focus == FOCUS_EDITOR) return self.handle_editor_key(k);
-	}
-	return null;
-}
-
-fn milktea::Cmd Editor.handle_menu_bar_key(&self, milktea::KeyMsg k) {
-	switch (k.code) {
-		case milktea::KeyCode.LEFT:
-			if (self.menu.selected > 0) self.menu.selected--;
-		case milktea::KeyCode.RIGHT:
-			if (self.menu.selected < MENU_COLS - 1) self.menu.selected++;
-		case milktea::KeyCode.DOWN:
-		case milktea::KeyCode.ENTER:
-			self.menu.open = true;
-			self.menu.item = 0;
-		default:
 	}
 	return null;
 }
@@ -522,12 +520,19 @@ fn milktea::Cmd Editor.handle_sidebar_browser_key(&self, milktea::KeyMsg k) {
 	return null;
 }
 
-fn milktea::Cmd Editor.handle_menu_key(&self, milktea::KeyMsg k) {
-	switch (self.menu.handle_key(k)) {
-		case Chosen.PICKED:
+// menu_event acts on what the menu bar reports. A pick from the platform's
+// menu bar of an item with a shortcut runs that shortcut: the platform took
+// the key (⌘Z, ⌘C, ...) before the window saw it, and the shortcut is what
+// the editor knows how to do.
+fn milktea::Cmd Editor.menu_event(&self, boba::MenuEvent ev, bool native) {
+	switch (ev.kind) {
+		case PICKED:
+			if (native && ev.item.key != 0) {
+				return self.handle_ctrl_key({ .code = milktea::KeyCode.RUNE, .rune = ev.item.key, .ctrl = true });
+			}
 			self.focus = FOCUS_EDITOR;
-			return self.run_menu_item(self.menu.current_item().label);
-		case Chosen.DISMISSED:
+			return self.run_menu_item(ev.item.label);
+		case DISMISSED:
 			self.focus = FOCUS_EDITOR;
 			self.status_msg = "Ready";
 		default:
@@ -615,14 +620,6 @@ fn bool Editor.wheel_scroll(&self, milktea::MouseMsg m) {
 }
 
 fn milktea::Cmd Editor.handle_mouse_result(&self) {
-	switch (self.menu.take_pending()) {
-		case Chosen.PICKED:
-			self.focus = FOCUS_EDITOR;
-			return self.run_menu_item(self.menu.current_item().label);
-		case Chosen.DISMISSED:
-			self.status_msg = "Ready";
-		default:
-	}
 	switch (self.shortcuts.take_pending()) {
 		case Pressed.CONFIRMED:
 			self.status_msg = "Ready";
@@ -739,16 +736,6 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 		.h = editor_h,
 	};
 
-	// In the GUI the top row stands in for the title bar, and the platform's
-	// window buttons sit in it, centred on the bar; the menu titles start
-	// after them. In the terminal there is no window and nothing to make
-	// room for.
-	xray::Node* lead = null;
-	xray::Node* trail = null;
-	$if $feat(MILKTEA_GUI):
-		self.make_room_for_window_buttons();
-	$endif
-
 	// A terminal reports the pointer only in all-motion mode, which hover
 	// needs. A window tracks hover itself, so the model only asks for moves
 	// with the button held, and the rest redraw nothing.
@@ -759,17 +746,41 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 	$endif
 	return milktea::root()
 		.add(milktea::vstack()
-			.add(self.menu.bar(th, self.focus == FOCUS_MENU_BAR, lead, trail))
+			.add(self.menu_bar_node(th))
 			.add(editor_row)
 			.add(statusbar))
 		.add(self.doc.completion_node(
 			glaze::style().foreground(th.bar_text).background(th.bar),
 			glaze::style().foreground(th.ink).background(th.accent)))
-		.add(self.menu.dropdown(BAR_ROWS, th))
+		.add(self.menu.dropdown())
 		.add(self.shortcuts.node(th, editor_area))
 		.add(self.about.node(th, editor_area))
 		.add(self.quit_confirm.node(th, editor_area))
 		.add(self.command_bar.node(th));
+}
+
+// menu_bar_node styles the menu bar from the theme: blocks of colour in a
+// terminal; in the GUI a padded bar with rounded highlights and a floating,
+// rounded dropdown. The bar keeps clear of the window buttons itself.
+fn xray::Node* Editor.menu_bar_node(&self, Theme* th) {
+	glaze::Style bar = { .bg = th.bar, .fg = th.bar_text };
+	glaze::Style item = { .bg = th.bar, .fg = th.bar_text };
+	self.menu.active = self.focus == FOCUS_MENU_BAR;
+	self.menu = self.menu
+		.with_styles(bar, bar, { .bg = th.selection, .fg = th.bar_text }, { .bg = th.accent, .fg = th.ink, .bold = true })
+		.with_panel_styles({ .bg = th.bar, .fg = th.bar_text, .border = glaze::NORMAL, .border_color = th.text },
+			item, { .bg = th.ink, .fg = th.accent, .bold = true }, { .fg = th.dim })
+		.with_shapes(
+			xray::solid().padding(BAR_PADDING_Y, BAR_PADDING_X, BAR_PADDING_Y, BAR_PADDING_X),
+			xray::solid().round(HIGHLIGHT_RADIUS),
+			xray::solid().round(HIGHLIGHT_RADIUS),
+			xray::solid().round(PANEL_RADIUS)
+				.with_border(1.0f, th.border)
+				.with_shadow(0.0f, 10.0f, 30.0f, dye::color_rgba(0, 0, 0, 140))
+				.with_inner_shadow(0.0f, 1.0f, 0.0f, dye::color_rgba(255, 255, 255, 22))
+				.padding(PANEL_PAD_Y, 0, PANEL_PAD_Y, 0))
+		.with_panel_shadow(milktea::shadow(2, 1).with_color(th.shadow));
+	return self.menu.node();
 }
 
 // The GUI build (ted-gui) supplies its own main() in gui_main.c3.

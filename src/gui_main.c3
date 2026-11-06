@@ -170,14 +170,6 @@ fn void use_app_font() @local {
 	}
 }
 
-// make_room_for_window_buttons centres the platform's window buttons on the
-// top bar, whose height follows the text size, and starts the menu titles
-// after them.
-fn void Editor.make_room_for_window_buttons(&self) {
-	milktea_gui::set_chrome_height((int)top_bar_pixel_height());
-	self.menu.x_inset = milktea_gui::chrome_inset_cells((int)milktea::layout_metrics().unit_w());
-}
-
 // GUI entrypoint, built only by the ted-gui target (see project.json). The
 // terminal build uses ted.c3's main() instead and never links raylib. Same
 // model and same view tree either way; only the display changes.
