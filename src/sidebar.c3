@@ -260,7 +260,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 			}
 			ed.file_slots[i] = { .ed = ed, .index = i };
 			xray::Node* row = sidebar_text(s, text, lit);
-			row.ref(&ed.file_slots[i])
+			row.id("open-file").key(path).role(LIST_ITEM).ref(&ed.file_slots[i])
 				.on_click(&file_row_clicked)
 				.on_hover_in(&file_row_hover_in)
 				.on_hover_out(&file_row_hover_out);
@@ -276,7 +276,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 	// so it can apply the same focus logic as the open-files panel above.
 	sidebar_add_browser(ed, v, content_w, &bg, &file_row, hover_bg, &file_row_focused);
 
-	return sidebar_frame(v, content_w + SIDEBAR_BORDER, th);
+	return sidebar_frame(v, content_w + SIDEBAR_BORDER, th).id("sidebar");
 }
 
 // sidebar_add_browser appends the "Files" header and one row per visible file
@@ -330,7 +330,8 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 			}
 			row = sidebar_text(s, text, is_hover);
 		}
-		row.ref(&ed.browser_slots[i])
+		row.id("file").key(string::tformat("%s%s", name, suffix)).role(LIST_ITEM)
+			.ref(&ed.browser_slots[i])
 			.on_click(&browser_row_index_clicked)
 			.on_hover_in(&browser_row_hover_in)
 			.on_hover_out(&browser_row_hover_out);

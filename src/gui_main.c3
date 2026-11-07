@@ -184,6 +184,8 @@ fn void toggle_fullscreen() => milktea_gui::toggle_fullscreen();
 // Raylib only writes screenshots inside its working directory, so put a
 // relative path there (for example TED_SHOT=out/ted.png).
 fn int main(String[] args) {
+	// ted ctl SOCKET ...: drive a ted started with MILKTEA_CONTROL=SOCKET.
+	if (args.len > 1 && args[1] == "ctl") return milktea::control_client(args[2..]);
 	Editor e = { };
 	if (args.len > 1) e.open_arg = args[1];
 	// The window has no title bar: the top row of the view stands in for it,

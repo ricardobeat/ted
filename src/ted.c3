@@ -804,6 +804,7 @@ fn xray::Node* Editor.view(Editor* self) @dynamic {
 	// The padding is the bar's own, so the whole strip reads as one bar out
 	// to the ends the row of hints does not reach.
 	xray::Node* statusbar = xray::vstack().style(status_style.pad_x(STATUS_PAD))
+		.id("statusbar").role(STATUS)
 		.height(milktea::cells(STATUS_ROWS))
 		.add(status_row);
 
@@ -869,6 +870,8 @@ fn xray::Node* Editor.menu_bar_node(&self, Theme* th) {
 // The GUI build (ted-gui) supplies its own main() in gui_main.c3.
 fn int main(String[] args) @feat(!MILKTEA_GUI) {
 	if (args.len > 1 && args[1] == "--render") return dump_render();
+	// ted ctl SOCKET ...: drive a ted started with MILKTEA_CONTROL=SOCKET.
+	if (args.len > 1 && args[1] == "ctl") return milktea::control_client(args[2..]);
 	Editor e = { };
 	if (args.len > 1) e.open_arg = args[1];
 	return milktea::@run(&e, { .alt_screen = true });

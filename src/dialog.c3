@@ -112,7 +112,7 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 
 	xray::Node* panel_node = floating(xray::vstack().style(panel).with_gap(1).center(),
 		th, th.panel, th.border);
-	panel_node.ref(self).on_click_outside(&backdrop_dismissed);
+	panel_node.id("dialog").key(self.title).role(DIALOG).ref(self).on_click_outside(&backdrop_dismissed);
 
 	panel_node.add(milktea::text(self.title, title_s).fit_height());
 	panel_node.add(milktea::text(self.body, body_s).fit_height());
@@ -128,7 +128,8 @@ fn xray::Node* Dialog.node(&self, Theme* th, xray::Rect area) {
 		Button b = self.buttons[i].themed(th).with_focus(i == self.focused).with_hover(i == self.hover);
 		xray::Node* btn = b.decorate(milktea::text(b.view(), { .bg = th.panel })
 			.width(milktea::cells(b.measure_width(2))));
-		btn.ref(&self.button_slots[i]).on_click(&button_clicked)
+		btn.id("button").key(self.buttons[i].label.trim()).role(BUTTON)
+			.ref(&self.button_slots[i]).on_click(&button_clicked)
 			.on_hover_in(&button_hover_in).on_hover_out(&button_hover_out);
 		buttons_row.add(btn);
 	}
