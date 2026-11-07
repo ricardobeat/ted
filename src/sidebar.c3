@@ -43,7 +43,7 @@ fn String sidebar_basename(String path) {
 // ── File-row click context ───────────────────────────────────────────────────
 //
 // Each open-file row in the sidebar owns one FileSlot, registered into the
-// node tree's click context via .id_with(&slot). The static handlers below
+// node tree's click context via .ref(&slot). The static handlers below
 // read the slot to figure out which file was clicked and what to do with it,
 // without the click site needing any layout math — the framework passes
 // rect-local cell coordinates, but the slot's index is the row's identity.
@@ -260,7 +260,7 @@ fn xray::Node* sidebar_tree(Editor* ed) {
 			}
 			ed.file_slots[i] = { .ed = ed, .index = i };
 			xray::Node* row = sidebar_text(s, text, lit);
-			row.id_with(&ed.file_slots[i])
+			row.ref(&ed.file_slots[i])
 				.on_click(&file_row_clicked)
 				.on_hover_in(&file_row_hover_in)
 				.on_hover_out(&file_row_hover_out);
@@ -330,7 +330,7 @@ fn void sidebar_add_browser(Editor* ed, xray::Node* v, sz content_w,
 			}
 			row = sidebar_text(s, text, is_hover);
 		}
-		row.id_with(&ed.browser_slots[i])
+		row.ref(&ed.browser_slots[i])
 			.on_click(&browser_row_index_clicked)
 			.on_hover_in(&browser_row_hover_in)
 			.on_hover_out(&browser_row_hover_out);

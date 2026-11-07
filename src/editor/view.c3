@@ -1136,7 +1136,7 @@ fn sz View.pos_at_cell(&self, sz col, sz row) {
 }
 
 fn xray::Node* View.node(&self) {
-	xray::Node* n = xray::content_node(self).id_with(self)
+	xray::Node* n = xray::content_node(self).ref(self)
 		.on_click(&view_pressed).on_drag(&view_dragged)
 		.pointer(xray::PointerShape.TEXT);
 	boba::Scroller* sc = self.scroll_state();

@@ -78,7 +78,7 @@ struct Editor {
 	sz active_file;
 
 	// Per-row click slot for the open-files panel of the sidebar. Each row's
-	// id_with(&file_slots[i]) carries this address through the node tree to
+	// ref(&file_slots[i]) carries this address through the node tree to
 	// the click handler. -1 in file_hover = no row hovered. The address stays
 	// stable across frames even though the node tree is rebuilt each call to
 	// view().

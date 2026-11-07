@@ -139,7 +139,7 @@ fn xray::Node* CommandBar.node(&self, Theme* th) {
 	})).width(milktea::cells(COMMAND_WIDTH))
 		.place(xray::JustifyContent.JUSTIFY_CENTER, xray::AlignItems.ALIGN_START)
 		.offset(0, COMMAND_TOP), th, th.bar, th.border);
-	panel.id_with(self).on_click_outside(&command_outside);
+	panel.ref(self).on_click_outside(&command_outside);
 
 	// The search field: a prompt and the input, on the editor's colour so it
 	// reads as a box to type in.
@@ -169,7 +169,7 @@ fn xray::Node* CommandBar.node(&self, Theme* th) {
 		line.add(milktea::text(name, highlight_style(name_s)).width(milktea::cells(name.len)));
 		line.add(milktea::text(parts[1], highlight_style(dir_s)).width(full));
 		line = pixel_ui() ? (lit ? highlight(line, th.accent) : clear_bg(line)) : line;
-		panel.add(line.id_with(&self.slots[row]).on_click(&command_clicked));
+		panel.add(line.ref(&self.slots[row]).on_click(&command_clicked));
 	}
 
 	panel.add(milktea::text("", plain).width(full).height(milktea::cells(1)));
