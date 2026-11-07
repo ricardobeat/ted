@@ -1135,26 +1135,6 @@ fn sz View.pos_at_cell(&self, sz col, sz row) {
 	return self.buf.len();
 }
 
-// selectable_text, selected_range and select_range let the control socket
-// select by a string or a pattern and report the primary selection (see
-// xray::Content.selected_range).
-fn String View.selectable_text(&self) @dynamic => self.buf.str();
-
-fn bool View.selected_range(&self, sz* start, sz* end) @dynamic {
-	Selection s = *self.primary();
-	if (s.anchor == s.head) return false;
-	*start = s.anchor < s.head ? s.anchor : s.head;
-	*end = s.anchor < s.head ? s.head : s.anchor;
-	return true;
-}
-
-fn void View.select_range(&self, sz start, sz end) @dynamic {
-	self.sels.clear();
-	self.sels.push({ .anchor = start, .head = end, .goal_col = -1 });
-	self.completion.close();
-	self.scroll_to_caret();
-}
-
 fn xray::Node* View.node(&self) {
 	xray::Node* n = xray::content_node(self).id("editor").role(TEXT_FIELD).ref(self)
 		.on_click(&view_pressed).on_drag(&view_dragged)
