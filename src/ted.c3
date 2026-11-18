@@ -870,8 +870,6 @@ fn xray::Node* Editor.menu_bar_node(&self, Theme* th) {
 // The GUI build (ted-gui) supplies its own main() in gui_main.c3.
 fn int main(String[] args) @feat(!MILKTEA_GUI) {
 	if (args.len > 1 && args[1] == "--render") return dump_render();
-	// ted ctl SOCKET ...: drive a ted started with MILKTEA_CONTROL=SOCKET.
-	if (args.len > 1 && args[1] == "ctl") return milktea::control_client(args[2..]);
 	Editor e = { };
 	if (args.len > 1) e.open_arg = args[1];
 	return milktea::@run(&e, { .alt_screen = true });

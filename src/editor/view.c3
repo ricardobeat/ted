@@ -4,6 +4,7 @@ import glaze;
 import xray;
 import milktea;
 import boba;
+import utf8;
 import std::collections::list;
 
 // View is the editor component: a buffer, the selections in it, the
@@ -343,7 +344,7 @@ fn void View.layout_line(&self, sz line, sz width, LineLayout* out) {
 		glaze::Style s = self.style_at(pos);
 		if (self.selected(pos)) s = overlay(s, self.selection_style);
 		if (self.is_secondary_caret(pos)) s = overlay(s, self.caret_style);
-		sz n = glaze::utf8_sequence_len(text, pos);
+		sz n = utf8::seq_len(text[pos]);
 		if (text[pos] == '\t') {
 			sz w = self.tab_width - col % self.tab_width;
 			out.glyphs.push({ .text = "        "[:w], .width = w, .pos = pos, .style = s });
@@ -630,7 +631,7 @@ fn sz View.line_width(&self, sz line) {
 	String text = self.buf.str();
 	sz end = self.buf.line_end(line);
 	sz col = 0;
-	for (sz pos = self.buf.line_start(line); pos < end; pos += glaze::utf8_sequence_len(text, pos)) {
+	for (sz pos = self.buf.line_start(line); pos < end; pos += utf8::seq_len(text[pos])) {
 		col += text[pos] == '\t' ? self.tab_width - col % self.tab_width : glaze::utf8_width_at(text, pos);
 	}
 	return col;
