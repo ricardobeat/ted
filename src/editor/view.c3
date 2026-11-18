@@ -104,6 +104,13 @@ struct View (xray::Content) {
 	// same way.
 	sz bar_width;
 	sz bar_height;
+	// A drag of the scrollbar's thumb: the press landed on it (grab_pending
+	// until the press message gives its point), and where the pointer and
+	// the view were then, in layout units.
+	bool bar_grab_pending;
+	bool bar_dragging;
+	sz bar_grab_py;
+	float bar_grab_pos;
 
 	// Wrapped-row index each line starts at, plus the total at the end, for
 	// the scrollbar. Laying out the whole document on every render to count
@@ -1173,15 +1180,65 @@ fn xray::Node* View.scrollbar_node(&self) {
 	self.bar_height = self.rect.h;
 	if (self.scrollbar_reserved() <= 0 || self.rect.w <= 0) return null;
 	xray::LayoutMetrics m = milktea::layout_metrics();
-	boba::ScrollbarStyle style = {
+	xray::Node* bar = self.scroller.scrollbar(self.bar_track(), self.bar_style());
+	if (!bar) return null;
+	return bar.at((self.rect.w - 1) * m.unit_w(), SCROLLBAR_INSET, PX);
+}
+
+// bar_track is the length of the scrollbar's track, in layout units.
+fn sz View.bar_track(&self) => self.rect.h * milktea::layout_metrics().unit_h() - 2 * SCROLLBAR_INSET;
+
+fn boba::ScrollbarStyle View.bar_style(&self) {
+	return {
 		.thumb = self.scrollbar_thumb_style.fg,
 		.width = SCROLLBAR_THUMB_W,
 		.min_thumb = SCROLLBAR_MIN_THUMB,
+		// The whole last cell takes the pointer; the bar is drawn in its middle.
+		.hit_width = milktea::layout_metrics().unit_w(),
+		.ref = self,
+		.on_thumb = &bar_thumb_pressed,
+		.on_track = &bar_track_pressed,
 	};
-	xray::Node* bar = self.scroller.scrollbar(self.rect.h * m.unit_h() - 2 * SCROLLBAR_INSET, style);
-	if (!bar) return null;
-	sz x = (self.rect.w - 1) * m.unit_w() + (m.unit_w() - SCROLLBAR_THUMB_W) / 2;
-	return bar.at(x, SCROLLBAR_INSET, PX);
+}
+
+// A press on the thumb starts a drag, which bar_mouse follows from the press
+// message on, by the pixel.
+fn void bar_thumb_pressed(void* id, String id_str, sz col, sz row) @local {
+	((View*)id).bar_grab_pending = true;
+}
+
+// A press on the track pages towards it.
+fn void bar_track_pressed(void* id, String id_str, sz col, sz row) @local {
+	View* v = (View*)id;
+	float at = (float)(row * milktea::layout_metrics().unit_h() - SCROLLBAR_INSET);
+	sz page = v.height > 1 ? v.height - 1 : 1;
+	v.scroll(at < v.scroller.thumb_mid(v.bar_track(), v.bar_style()) ? -page : page);
+}
+
+// bar_mouse follows a drag of the scrollbar's thumb, and reports whether
+// the message was part of one. While it lasts the window reports every move,
+// not only those that cross into another cell.
+fn bool View.bar_mouse(&self, milktea::MouseMsg m) {
+	if (self.bar_grab_pending && m.action == milktea::MouseAction.MOUSE_PRESS) {
+		self.bar_grab_pending = false;
+		self.bar_dragging = true;
+		self.bar_grab_py = m.py;
+		self.bar_grab_pos = self.scroller.pos_px;
+		milktea::set_mouse_mode(milktea::MouseMode.MOUSE_MODE_ALL_MOTION);
+		return true;
+	}
+	if (!self.bar_dragging) return false;
+	switch (m.action) {
+		case milktea::MouseAction.MOUSE_MOTION:
+			self.scroll_state();
+			self.scroller.drag_thumb(self.bar_grab_pos, (float)(m.py - self.bar_grab_py), self.bar_track(), self.bar_style());
+			self.set_top_row(self.scroller.top_row());
+		case milktea::MouseAction.MOUSE_RELEASE:
+			self.bar_dragging = false;
+			milktea::set_mouse_mode(milktea::MouseMode.MOUSE_MODE_CELL_MOTION);
+		default:
+	}
+	return true;
 }
 
 fn void View.on_press(&self, ViewPressFn f, void* ctx) {

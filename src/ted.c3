@@ -411,6 +411,7 @@ fn milktea::Cmd Editor.update(Editor* self, milktea::Msg msg) @dynamic {
 		if (ev.kind != NONE) return self.menu_event(ev, msg.kind == milktea::MsgKind.MENU);
 	}
 	if (msg.kind == milktea::MsgKind.MOUSE) {
+		if (self.doc.bar_mouse(msg.mouse)) return null;
 		if (self.wheel_scroll(msg.mouse)) return null;
 		return self.handle_mouse_result();
 	}
